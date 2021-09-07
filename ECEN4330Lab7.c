@@ -114,6 +114,8 @@ volatile unsigned char received_flag = 0;
 void HEXtoASCII_8write(unsigned char h);
 void FIND_display();
 void write(u8 c);
+void resetLCD();
+void LCD_mainMenu();
 
 /**********************************************************************
  XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -137,6 +139,13 @@ void ISR_receive() __interrupt (4) {
         received_byte = SBUF;
         RI = 0;
         received_flag = 1;
+        resetLCD();
+        LCD_string_write("UART data\nreceived.\n\n >> ");
+        write(received_byte);
+        delay(500);
+    }
+    else {
+        TI = 0;
     }
 }
 
@@ -148,7 +157,7 @@ void ISR_receive() __interrupt (4) {
  *********************************************************************/
 void UART_Init(){
     SCON = 0x50;  // Asynchronous mode, 8-bit data and 1-stop bit
-    PCON = 0x00;
+    //PCON = 0x00;
     TMOD = 0x20;  // Timer1 in Mode2. in 8 bit auto reload
     TH1 =  0xFD;  // Load timer value for 9600 baudrate
     TR1 = 1;      // Turn ON the timer for Baud rate generation
@@ -163,8 +172,10 @@ void UART_Init(){
  * Transmits data through UART
  *********************************************************************/
 void UART_transmit(){
-    SBUF = byte;
+    //SBUF = byte;
+    //LCD_string_write("x0");
     while(TI == 1);
+    //LCD_string_write("x1");
     TI = 0;
 }
 
@@ -2303,10 +2314,12 @@ void UART_dataRate() {
         }
     } while(!dataEnd);
     delay(200);
+    /*
     resetLCD1();
     setTextColor(WHITE, BLACK);
     LCD_string_write("\nReturning to\nlast menu.");
     delay(200);
+    */
 }
 
 void UART_dataBits() {
@@ -2316,11 +2329,12 @@ void UART_dataBits() {
         LCD_string_write("(1) 8\n");
         LCD_string_write("(2) 9\n");
         LCD_string_write("\nCurrent: ");
+        dataBits = SCON & 0xC0;
         switch(dataBits) {
-            case 0:
+            case 0x40:
                 LCD_string_write("8\n");
                 break;
-            case 1:
+            case 0xC0:
                 LCD_string_write("9\n");
                 break;
         }
@@ -2331,13 +2345,13 @@ void UART_dataBits() {
 
             case '1':
                 validInput = 1;
-                dataBits = 0;
+                SCON = SCON & 0x7F;
                 dataEnd = 1;
                 LCD_string_write("1\n");
                 break;
             case '2':
                 validInput = 1;
-                dataBits = 1;
+                SCON = SCON | 0xC0;
                 dataEnd = 1;
                 LCD_string_write("2\n");
                 break;
@@ -2350,10 +2364,12 @@ void UART_dataBits() {
         }
     } while(!dataEnd);
     delay(200);
+    /*
     resetLCD1();
     setTextColor(WHITE, BLACK);
     LCD_string_write("\nReturning to\nlast menu.");
     delay(200);
+    */
 }
 
 
@@ -2408,30 +2424,47 @@ void UART_parity() {
         }
     } while(!dataEnd);
     delay(200);
-    resetLCD1();
-    setTextColor(WHITE, BLACK);
-    LCD_string_write("\nReturning to\nlast menu.");
-    delay(200);
 }
 
+
+/**********************************************************************
+ * * UART_send
+ * 
+ * Sends an single ASCII character via UART
+ *********************************************************************/
 void UART_send() {
     resetLCD();
+
+    // Prompt user for character to send
     LCD_string_write("\nEnter\ncharacter\nto send:\n\n   _");
     
+    // Move cursor to start of input line
     cursor_x -= 1 * textsize * 6;
+
+    // Read user input & write on LCD
     key = keyDetect();
     write(key);
+    SBUF = key;
+    UART_transmit();
     delay(200);
     resetLCD();
 }
 
 
 /**********************************************************************
- * * UART Test -- DONE [CONFIRMED]
+ * * UART
  * 
- * 
+ * Settings configuration and sending data.
+ *
+ * UART menu for:
+ *  (1) data rate
+ *  (2) data bits
+ *  (3) parity
+ *  (4) send data
  *********************************************************************/
 void UART(){
+    // Display UART menu
+    // Loop until user presses 'E'
     do{
         resetLCD();
         LCD_string_write("\n(1) Data Rate");
@@ -2440,25 +2473,35 @@ void UART(){
         LCD_string_write("\n(4) Send Data");
         LCD_string_write("\n(E) End\n");
         
+        // Read user input & select respective function
         key = keyDetect();
         switch (key){
 
+            // Set data rate
             case '1':
                 UART_dataRate();
                 dataEnd = 0;
                 break;
+
+            // Set data bits
             case '2':
                 UART_dataBits();
                 dataEnd = 0;
                 break;
+
+            // Set parity
             case '3':
                 UART_parity();
                 dataEnd = 0;
                 break;
+            
+            // Send a character via UART
             case '4':
                 UART_send();
                 dataEnd = 0;
                 break;
+
+            // End - Return to main menu
             case 'E':
                 resetLCD1();
                 setTextColor(WHITE, BLACK);
@@ -2466,6 +2509,8 @@ void UART(){
                 delay(200);
                 dataEnd = 1;
                 break;
+
+            // Invalid input
             default:
                 invalidInput();
                 dataEnd = 0;
