@@ -148,6 +148,7 @@ void ISR_receive() __interrupt (4) {
  *********************************************************************/
 void UART_Init(){
     SCON = 0x50;  // Asynchronous mode, 8-bit data and 1-stop bit
+    PCON = 0x00;
     TMOD = 0x20;  // Timer1 in Mode2. in 8 bit auto reload
     TH1 =  0xFD;  // Load timer value for 9600 baudrate
     TR1 = 1;      // Turn ON the timer for Baud rate generation
@@ -2229,7 +2230,15 @@ void UART_dataRate() {
         LCD_string_write("(4) 9600\n");
         LCD_string_write("(5) 19200\n\n");
         LCD_string_write("Current:\n");
-        if(PCON & 0x80 == 0x80){
+        if(PCON == 0x80){
+            if (TH1 == 0xFD){
+                LCD_string_write("19200\n");
+            }
+            else{
+                LCD_string_write("Invalid\n");
+            }
+        }
+        else {
             switch(TH1) {
                 case 0xE8:
                     LCD_string_write("1200\n");
@@ -2245,11 +2254,6 @@ void UART_dataRate() {
                     break;
             }
         }
-        else{
-            if (TH1 == 0xFD){
-                LCD_string_write("19200\n");
-            }
-        }
         LCD_string_write("\n   _");
         cursor_x -= 1 * textsize * 6;
         key = keyDetect();
@@ -2258,31 +2262,35 @@ void UART_dataRate() {
             case '1':
                 validInput = 1;
                 TH1 = 0xE8;
+                PCON = 0x00;
                 dataEnd = 1;
                 LCD_string_write("1\n");
                 break;
             case '2':
                 validInput = 1;
                 TH1 = 0xF4;
+                PCON = 0x00;
                 dataEnd = 1;
                 LCD_string_write("2\n");
                 break;
             case '3':
                 validInput = 1;
                 TH1 = 0xFA;
+                PCON = 0x00;
                 dataEnd = 1;
                 LCD_string_write("3\n");
                 break;
             case '4':
                 validInput = 1;
                 TH1 = 0xFD;
+                PCON = 0x00;
                 dataEnd = 1;
                 LCD_string_write("4\n");
                 break;
             case '5':
                 validInput = 1;
                 TH1 = 0xFD;
-                PCON = PCON | 0x80;
+                PCON = 0x80;
                 dataEnd = 1;
                 LCD_string_write("5\n");
                 break;
