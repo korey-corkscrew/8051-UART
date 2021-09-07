@@ -2342,6 +2342,7 @@ void UART_dataBits() {
             case '1':
                 validInput = 1;
                 SCON = SCON & 0x7F;
+                pairty = 2; // None
                 dataEnd = 1;
                 LCD_string_write("1\n");
                 break;
@@ -2350,6 +2351,8 @@ void UART_dataBits() {
                 SCON = SCON | 0xC0;
                 dataEnd = 1;
                 LCD_string_write("2\n");
+                delay(200);
+                UART_parity();
                 break;
             default:
                 validInput = 0;
