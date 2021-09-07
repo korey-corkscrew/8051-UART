@@ -1,0 +1,574 @@
+ASxxxx Linker V03.00 + NoICE + sdld,  page 1.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CABS                                00000000    00000000 =           0. bytes (ABS,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   00000000  l_BIT_BANK                      
+C:   00000000  l_CABS                          
+C:   00000000  l_GSINIT1                       
+C:   00000000  l_GSINIT5                       
+C:   00000000  l_IABS                          
+C:   00000000  l_ISEG                          
+C:   00000000  l_PSEG                          
+C:   00000000  l_REG_BANK_1                    
+C:   00000000  l_REG_BANK_2                    
+C:   00000000  l_REG_BANK_3                    
+C:   00000000  l_RSEG                          
+C:   00000000  l_RSEG0                         
+C:   00000000  l_RSEG1                         
+C:   00000000  l_XABS                          
+C:   00000000  l_XINIT                         
+C:   00000000  l_XISEG                         
+C:   00000000  l_XSEG                          
+C:   00000000  l__CODE                         
+C:   00000000  s_BSEG                          
+C:   00000000  s_CABS                          
+C:   00000000  s_DSEG                          
+C:   00000000  s_HOME                          
+C:   00000000  s_IABS                          
+C:   00000000  s_ISEG                          
+C:   00000000  s_REG_BANK_0                    
+C:   00000000  s_RSEG                          
+C:   00000000  s_RSEG0                         
+C:   00000000  s_RSEG1                         
+C:   00000000  s_XABS                          
+C:   00000001  l_BSEG                          
+C:   00000001  l_BSEG_BYTES                    
+C:   00000001  s_PSEG                          
+C:   00000001  s_XISEG                         
+C:   00000001  s_XSEG                          
+C:   00000003  l_GSFINAL                       
+C:   00000003  l_GSINIT0                       
+C:   00000006  l_OSEG                          
+C:   00000008  l_REG_BANK_0                    
+C:   00000008  s_OSEG                          
+C:   00000008  s_REG_BANK_1                    
+C:   0000000A  l_GSINIT2                       
+C:   00000010  s_REG_BANK_2                    
+C:   00000018  s_BIT_BANK                      
+C:   00000018  s_REG_BANK_3                    
+C:   0000001D  l_GSINIT                        
+C:   00000020  s_BSEG_BYTES                    
+C:   00000020  s__CODE                         
+C:   00000022  l_GSINIT3                       
+C:   00000029  l_HOME                          
+C:   00000029  s_GSINIT0                       
+ASxxxx Linker V03.00 + NoICE + sdld,  page 2.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CABS                                00000000    00000000 =           0. bytes (ABS,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   0000002A  l_GSINIT4                       
+C:   0000002C  s_GSINIT1                       
+C:   0000002C  s_GSINIT2                       
+C:   00000036  s_GSINIT3                       
+C:   00000058  s_GSINIT4                       
+C:   0000006E  l_DSEG                          
+C:   0000007E  s_SSEG                          
+C:   00000082  l_SSEG                          
+C:   00000082  s_GSINIT                        
+C:   00000082  s_GSINIT5                       
+C:   0000009F  s_GSFINAL                       
+C:   000000A2  s_CSEG                          
+C:   00000100  l_IRAM                          
+C:   00000B5E  l_CONST                         
+C:   0000279B  l_CSEG                          
+C:   0000283D  s_CONST                         
+C:   0000339B  s_XINIT                         
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 3.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+     00000000  .__.ABS.                           _startup
+     00000080  _P0                                ecen4330lab7
+     00000080  _P0_0                              ecen4330lab7
+     00000081  _P0_1                              ecen4330lab7
+     00000081  _SP                                ecen4330lab7
+     00000082  _DPL                               ecen4330lab7
+     00000082  _P0_2                              ecen4330lab7
+     00000083  _DPH                               ecen4330lab7
+     00000083  _P0_3                              ecen4330lab7
+     00000084  _P0_4                              ecen4330lab7
+     00000085  _P0_5                              ecen4330lab7
+     00000086  _P0_6                              ecen4330lab7
+     00000087  _P0_7                              ecen4330lab7
+     00000087  _PCON                              ecen4330lab7
+     00000088  _IT0                               ecen4330lab7
+     00000088  _TCON                              ecen4330lab7
+     00000089  _IE0                               ecen4330lab7
+     00000089  _TMOD                              ecen4330lab7
+     0000008A  _IT1                               ecen4330lab7
+     0000008A  _TL0                               ecen4330lab7
+     0000008B  _IE1                               ecen4330lab7
+     0000008B  _TL1                               ecen4330lab7
+     0000008C  _TH0                               ecen4330lab7
+     0000008C  _TR0                               ecen4330lab7
+     0000008D  _TF0                               ecen4330lab7
+     0000008D  _TH1                               ecen4330lab7
+     0000008E  _TR1                               ecen4330lab7
+     0000008F  _TF1                               ecen4330lab7
+     00000090  _P1                                ecen4330lab7
+     00000090  _P1_0                              ecen4330lab7
+     00000090  _T2                                ecen4330lab7
+     00000091  _P1_1                              ecen4330lab7
+     00000091  _T2EX                              ecen4330lab7
+     00000092  _P1_2                              ecen4330lab7
+     00000093  _P1_3                              ecen4330lab7
+     00000094  _P1_4                              ecen4330lab7
+     00000095  _P1_5                              ecen4330lab7
+     00000096  _P1_6                              ecen4330lab7
+     00000097  _P1_7                              ecen4330lab7
+     00000098  _RI                                ecen4330lab7
+     00000098  _SCON                              ecen4330lab7
+     00000099  _SBUF                              ecen4330lab7
+     00000099  _TI                                ecen4330lab7
+     0000009A  _RB8                               ecen4330lab7
+     0000009B  _TB8                               ecen4330lab7
+     0000009C  _REN                               ecen4330lab7
+     0000009D  _SM2                               ecen4330lab7
+     0000009E  _SM1                               ecen4330lab7
+     0000009F  _SM0                               ecen4330lab7
+     000000A0  _P2                                ecen4330lab7
+ASxxxx Linker V03.00 + NoICE + sdld,  page 4.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+     000000A0  _P2_0                              ecen4330lab7
+     000000A0  __XPAGE                            
+     000000A1  _P2_1                              ecen4330lab7
+     000000A2  _P2_2                              ecen4330lab7
+     000000A3  _P2_3                              ecen4330lab7
+     000000A4  _P2_4                              ecen4330lab7
+     000000A5  _P2_5                              ecen4330lab7
+     000000A6  _P2_6                              ecen4330lab7
+     000000A7  _P2_7                              ecen4330lab7
+     000000A8  _EX0                               ecen4330lab7
+     000000A8  _IE                                ecen4330lab7
+     000000A9  _ET0                               ecen4330lab7
+     000000AA  _EX1                               ecen4330lab7
+     000000AB  _ET1                               ecen4330lab7
+     000000AC  _ES                                ecen4330lab7
+     000000AD  _ET2                               ecen4330lab7
+     000000AF  _EA                                ecen4330lab7
+     000000B0  _P3                                ecen4330lab7
+     000000B0  _P3_0                              ecen4330lab7
+     000000B0  _RXD                               ecen4330lab7
+     000000B1  _P3_1                              ecen4330lab7
+     000000B1  _TXD                               ecen4330lab7
+     000000B2  _INT0                              ecen4330lab7
+     000000B2  _P3_2                              ecen4330lab7
+     000000B3  _INT1                              ecen4330lab7
+     000000B3  _P3_3                              ecen4330lab7
+     000000B4  _P3_4                              ecen4330lab7
+     000000B4  _T0                                ecen4330lab7
+     000000B5  _P3_5                              ecen4330lab7
+     000000B5  _T1                                ecen4330lab7
+     000000B6  _P3_6                              ecen4330lab7
+     000000B6  _WR                                ecen4330lab7
+     000000B7  _P3_7                              ecen4330lab7
+     000000B7  _RD                                ecen4330lab7
+     000000B8  _IP                                ecen4330lab7
+     000000B8  _PX0                               ecen4330lab7
+     000000B9  _PT0                               ecen4330lab7
+     000000BA  _PX1                               ecen4330lab7
+     000000BB  _PT1                               ecen4330lab7
+     000000BC  _PS                                ecen4330lab7
+     000000BD  _PT2                               ecen4330lab7
+     000000C8  _CP_RL2                            ecen4330lab7
+     000000C8  _T2CON                             ecen4330lab7
+     000000C8  _T2CON_0                           ecen4330lab7
+     000000C9  _C_T2                              ecen4330lab7
+     000000C9  _T2CON_1                           ecen4330lab7
+     000000C9  _T2MOD                             ecen4330lab7
+     000000CA  _RCAP2L                            ecen4330lab7
+     000000CA  _T2CON_2                           ecen4330lab7
+     000000CA  _TR2                               ecen4330lab7
+     000000CB  _EXEN2                             ecen4330lab7
+ASxxxx Linker V03.00 + NoICE + sdld,  page 5.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+.  .ABS.                            00000000    00000000 =           0. bytes (ABS,CON)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+     000000CB  _RCAP2H                            ecen4330lab7
+     000000CB  _T2CON_3                           ecen4330lab7
+     000000CC  _T2CON_4                           ecen4330lab7
+     000000CC  _TCLK                              ecen4330lab7
+     000000CC  _TL2                               ecen4330lab7
+     000000CD  _RCLK                              ecen4330lab7
+     000000CD  _T2CON_5                           ecen4330lab7
+     000000CD  _TH2                               ecen4330lab7
+     000000CE  _EXF2                              ecen4330lab7
+     000000CE  _T2CON_6                           ecen4330lab7
+     000000CF  _T2CON_7                           ecen4330lab7
+     000000CF  _TF2                               ecen4330lab7
+     000000D0  _P                                 ecen4330lab7
+     000000D0  _PSW                               ecen4330lab7
+     000000D1  _FL                                ecen4330lab7
+     000000D2  _OV                                ecen4330lab7
+     000000D3  _RS0                               ecen4330lab7
+     000000D4  _RS1                               ecen4330lab7
+     000000D5  _F0                                ecen4330lab7
+     000000D6  _AC                                ecen4330lab7
+     000000D7  _CY                                ecen4330lab7
+     000000E0  _A                                 ecen4330lab7
+     000000E0  _ACC                               ecen4330lab7
+     000000F0  _B                                 ecen4330lab7
+     000000F5  _B_5                               _gptrget
+     000000F6  _B_6                               _gptrget
+     000000F7  _B_7                               _gptrget
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 6.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+BSEG_BYTES                          00000020    00000001 =           1. bytes (REL,CON)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+ASxxxx Linker V03.00 + NoICE + sdld,  page 7.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+REG_BANK_0                          00000000    00000008 =           8. bytes (REL,OVR)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+ASxxxx Linker V03.00 + NoICE + sdld,  page 8.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+DSEG                                00000000    0000006E =         110. bytes (REL,CON)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+     00000021  _colloc                            ecen4330lab7
+     00000022  _rowloc                            ecen4330lab7
+     00000023  _lcd_address                       ecen4330lab7
+     00000025  _seg7_address                      ecen4330lab7
+     00000027  _read_ram_address                  ecen4330lab7
+     00000029  _cursor_x                          ecen4330lab7
+     0000002B  _cursor_y                          ecen4330lab7
+     0000002D  _textsize                          ecen4330lab7
+     0000002E  _rotation                          ecen4330lab7
+     0000002F  _textcolor                         ecen4330lab7
+     00000031  _textbgcolor                       ecen4330lab7
+     00000033  __width                            ecen4330lab7
+     00000035  __height                           ecen4330lab7
+     00000037  _key                               ecen4330lab7
+     00000038  _input16                           ecen4330lab7
+     0000003A  _input8                            ecen4330lab7
+     0000003B  _dataType                          ecen4330lab7
+     0000003C  _dataSize                          ecen4330lab7
+     0000003E  _validInput                        ecen4330lab7
+     0000003F  _dataEnd                           ecen4330lab7
+     00000040  _scrollEnd                         ecen4330lab7
+     00000041  _data                              ecen4330lab7
+     00000042  _addr0                             ecen4330lab7
+     00000044  _addr1                             ecen4330lab7
+     00000046  _addr2                             ecen4330lab7
+     00000048  _addr3                             ecen4330lab7
+     0000004A  _currAddr0                         ecen4330lab7
+     0000004C  _currAddr1                         ecen4330lab7
+     0000004E  _byte                              ecen4330lab7
+     00000050  _byte1                             ecen4330lab7
+     00000052  _ASCII                             ecen4330lab7
+     00000053  _count                             ecen4330lab7
+     00000055  _endAddrCalc                       ecen4330lab7
+     00000059  _xCursorHold                       ecen4330lab7
+     0000005A  _yCursorHold                       ecen4330lab7
+     0000005B  _textSizeHold                      ecen4330lab7
+     0000005C  _x                                 ecen4330lab7
+     0000005D  _y                                 ecen4330lab7
+     0000005E  _ts                                ecen4330lab7
+     0000005F  _dataRate                          ecen4330lab7
+     00000060  _dataBits                          ecen4330lab7
+     00000061  _parity                            ecen4330lab7
+     00000062  _received_byte                     ecen4330lab7
+     00000063  _received_flag                     ecen4330lab7
+     00000064  _rtcWrite_PARM_2                   ecen4330lab7
+     00000065  _drawPixel_PARM_2                  ecen4330lab7
+     00000067  _drawPixel_PARM_3                  ecen4330lab7
+     00000069  _fillRect_PARM_2                   ecen4330lab7
+     0000006B  _fillRect_PARM_3                   ecen4330lab7
+     0000006D  _fillRect_PARM_4                   ecen4330lab7
+ASxxxx Linker V03.00 + NoICE + sdld,  page 9.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+DSEG                                00000000    0000006E =         110. bytes (REL,CON)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+     0000006F  _fillRect_PARM_5                   ecen4330lab7
+     00000071  _drawChar_PARM_2                   ecen4330lab7
+     00000073  _drawChar_PARM_3                   ecen4330lab7
+     00000074  _drawChar_PARM_4                   ecen4330lab7
+     00000076  _drawChar_PARM_5                   ecen4330lab7
+     00000078  _drawChar_PARM_6                   ecen4330lab7
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 10.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+OSEG                                00000008    00000006 =           6. bytes (REL,OVR)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+     00000008  _RAMwrite_PARM_2                   ecen4330lab7
+     00000008  __divsint_PARM_2                   _divuint
+     00000008  __divuint_PARM_2                   _divuint
+     00000008  __modsint_PARM_2                   _moduint
+     00000008  __moduint_PARM_2                   _moduint
+     00000008  __mulint_PARM_2                    _mulint
+     00000008  _rtcCmd_PARM_2                     ecen4330lab7
+     00000008  _setAddress_PARM_2                 ecen4330lab7
+     00000008  _setCursor_PARM_2                  ecen4330lab7
+     00000008  _setTextColor_PARM_2               ecen4330lab7
+     00000008  _writeRegister16_PARM_2            ecen4330lab7
+     00000008  _writeRegister8_PARM_2             ecen4330lab7
+     0000000A  _setAddress_PARM_3                 ecen4330lab7
+     0000000C  _setAddress_PARM_4                 ecen4330lab7
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 11.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+SSEG                                0000007E    00000082 =         130. bytes (REL,OVR)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+     0000007E  __start__stack                     ecen4330lab7
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 12.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+HOME                                00000000    00000029 =          41. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   00000026  __sdcc_program_startup             ecen4330lab7
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 13.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT0                             00000029    00000003 =           3. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   00000029  __sdcc_gsinit_startup              
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 14.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT2                             0000002C    0000000A =          10. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+ASxxxx Linker V03.00 + NoICE + sdld,  page 15.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT3                             00000036    00000022 =          34. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   00000036  __mcs51_genXINIT                   
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 16.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT4                             00000058    0000002A =          42. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   00000058  __mcs51_genRAMCLEAR                
+C:   0000005E  __mcs51_genXRAMCLEAR               
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 17.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSINIT                              00000082    0000001D =          29. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+ASxxxx Linker V03.00 + NoICE + sdld,  page 18.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+GSFINAL                             0000009F    00000003 =           3. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+ASxxxx Linker V03.00 + NoICE + sdld,  page 19.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                000000A2    0000279B =       10139. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   000000A2  _ISR_receive                       ecen4330lab7
+C:   000000AE  _UART_Init                         ecen4330lab7
+C:   000000BE  _UART_transmit                     ecen4330lab7
+C:   000000C7  _delay                             ecen4330lab7
+C:   000000F3  _writeRegister8                    ecen4330lab7
+C:   00000113  _writeRegister16                   ecen4330lab7
+C:   00000158  _rtcInit                           ecen4330lab7
+C:   0000018E  _rtcBusy                           ecen4330lab7
+C:   0000019E  _rtcCmd                            ecen4330lab7
+C:   000001A7  _rtcWrite                          ecen4330lab7
+C:   000001D6  _rtcRead                           ecen4330lab7
+C:   0000020F  _rtcPrint                          ecen4330lab7
+C:   0000036B  _setCursor                         ecen4330lab7
+C:   00000378  _setTextColor                      ecen4330lab7
+C:   00000385  _setTextSize                       ecen4330lab7
+C:   0000039D  _setRotation                       ecen4330lab7
+C:   00000408  _setAddress                        ecen4330lab7
+C:   000004A3  _TFT_LCD_INIT                      ecen4330lab7
+C:   000005E2  _drawPixel                         ecen4330lab7
+C:   00000633  _fillRect                          ecen4330lab7
+C:   00000710  _fillScreen                        ecen4330lab7
+C:   000007F7  _drawChar                          ecen4330lab7
+C:   00000A01  _write                             ecen4330lab7
+C:   00000A67  _LCD_string_write                  ecen4330lab7
+C:   00000AA6  _keyDetect                         ecen4330lab7
+C:   00000BBF  _ASCIItoHEX                        ecen4330lab7
+C:   00000C55  _HEXtoASCII                        ecen4330lab7
+C:   00000CD7  _HEXtoASCII_8write                 ecen4330lab7
+C:   00000D14  _HEXtoASCII_16write                ecen4330lab7
+C:   00000DB9  _RAMwrite                          ecen4330lab7
+C:   00000DC9  _testRAM                           ecen4330lab7
+C:   00000DE8  _RAMread                           ecen4330lab7
+C:   00000DFB  _resetLCD                          ecen4330lab7
+C:   00000E23  _invalidInput                      ecen4330lab7
+C:   00000E4C  _inputRead16                       ecen4330lab7
+C:   00000F07  _inputRead8                        ecen4330lab7
+C:   00000F5B  _inputDataType                     ecen4330lab7
+C:   00001018  _inputDataSize                     ecen4330lab7
+C:   0000114F  _RAM_CHECK                         ecen4330lab7
+C:   00001388  _MOVE                              ecen4330lab7
+C:   000015A4  _COUNT                             ecen4330lab7
+C:   00001787  _DUMP_display                      ecen4330lab7
+C:   00001B52  _DUMP                              ecen4330lab7
+C:   00001C44  _EDIT_display                      ecen4330lab7
+C:   00001CBC  _EDIT                              ecen4330lab7
+C:   00001D74  _FIND_display                      ecen4330lab7
+C:   00002069  _FIND                              ecen4330lab7
+C:   0000212A  _resetLCD1                         ecen4330lab7
+C:   00002152  _UART_dataRate                     ecen4330lab7
+C:   000022C9  _UART_dataBits                     ecen4330lab7
+ASxxxx Linker V03.00 + NoICE + sdld,  page 20.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CSEG                                000000A2    0000279B =       10139. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   000023A6  _UART_parity                       ecen4330lab7
+C:   000024B9  _UART_send                         ecen4330lab7
+C:   000024EB  _UART                              ecen4330lab7
+C:   00002594  _LCD_mainMenu                      ecen4330lab7
+C:   000026F2  _main                              ecen4330lab7
+C:   0000278A  __divuint                          _divuint
+C:   000027B3  __mulint                           _mulint
+C:   000027B3  __mulint_dummy                     _mulint
+C:   000027D0  __moduint                          _moduint
+C:   0000281D  __gptrget                          _gptrget
+C:   00002839  __sdcc_external_startup            _startup
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 21.
+Hexadecimal  [32-Bits]
+
+Area                                    Addr        Size        Decimal Bytes (Attributes)
+--------------------------------        ----        ----        ------- ----- ------------
+CONST                               0000283D    00000B5E =        2910. bytes (REL,CON,CODE)
+
+      Value  Global                              Global Defined In Module
+      -----  --------------------------------   ------------------------
+C:   00002D38  _keypad                            ecen4330lab7
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 22.
+
+Files Linked                              [ module(s) ]
+
+ecen4330lab7.rel                          [  ]
+
+
+Libraries Linked                          [ object file ]
+
+C:\Program Files\SDCC\bin\..\lib\small/libint.lib
+                                          [ _divuint.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/mcs51.lib
+                                          [ crtclear.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/mcs51.lib
+                                          [ crtxinit.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/libint.lib
+                                          [ _mulint.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/libint.lib
+                                          [ _moduint.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/mcs51.lib
+                                          [ crtxclear.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/mcs51.lib
+                                          [ crtpagesfr.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/mcs51.lib
+                                          [ crtstart.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/libsdcc.lib
+                                          [ _gptrget.rel ]
+C:\Program Files\SDCC\bin\..\lib\small/libsdcc.lib
+                                          [ _startup.rel ]
+
+ASxxxx Linker V03.00 + NoICE + sdld,  page 23.
+
+User Base Address Definitions
+
+HOME = 0x0000
+XSEG = 0x0001
+PSEG = 0x0001
+ISEG = 0x0000
+BSEG = 0x0000
+
+
