@@ -2241,6 +2241,8 @@ void UART_dataRate() {
         LCD_string_write("(4) 9600\n");
         LCD_string_write("(5) 19200\n\n");
         LCD_string_write("Current:\n");
+
+        // TODO: 19200 baud does not work.
         if(PCON == 0x80){
             if (TH1 == 0xFD){
                 LCD_string_write("19200\n");
@@ -2314,12 +2316,6 @@ void UART_dataRate() {
         }
     } while(!dataEnd);
     delay(200);
-    /*
-    resetLCD1();
-    setTextColor(WHITE, BLACK);
-    LCD_string_write("\nReturning to\nlast menu.");
-    delay(200);
-    */
 }
 
 void UART_dataBits() {
@@ -2364,12 +2360,6 @@ void UART_dataBits() {
         }
     } while(!dataEnd);
     delay(200);
-    /*
-    resetLCD1();
-    setTextColor(WHITE, BLACK);
-    LCD_string_write("\nReturning to\nlast menu.");
-    delay(200);
-    */
 }
 
 
