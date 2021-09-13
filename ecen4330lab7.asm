@@ -21,7 +21,6 @@
 	.globl _main
 	.globl _UART
 	.globl _UART_send
-	.globl _UART_parity
 	.globl _UART_dataBits
 	.globl _UART_dataRate
 	.globl _resetLCD1
@@ -251,6 +250,8 @@
 	.globl _testRAM
 	.globl _resetLCD
 	.globl _FIND_display
+	.globl _UART_parity
+	.globl _UART_parity_count
 	.globl _LCD_mainMenu
 ;--------------------------------------------------------
 ; special function registers
@@ -520,9 +521,9 @@ _drawChar_PARM_5:
 	.ds 2
 _drawChar_PARM_6:
 	.ds 1
-_drawChar_x_65536_312:
+_drawChar_x_65536_319:
 	.ds 2
-_drawChar_line_196608_316:
+_drawChar_line_196608_323:
 	.ds 1
 _drawChar_sloc1_1_0:
 	.ds 2
@@ -559,6 +560,7 @@ _setAddress_PARM_4:
 	.area	OSEG    (OVR,DATA)
 _RAMwrite_PARM_2:
 	.ds 1
+	.area	OSEG    (OVR,DATA)
 	.area	OSEG    (OVR,DATA)
 	.area	OSEG    (OVR,DATA)
 ;--------------------------------------------------------
@@ -643,21 +645,22 @@ __interrupt_vect:
 ;	ecen4330lab7.c:40: __xdata unsigned char* seg7_address = (unsigned char __xdata*) __SEG_7_ADDRESS__;
 	mov	_seg7_address,#0x00
 	mov	(_seg7_address + 1),#0x80
-;	ecen4330lab7.c:103: unsigned int count = 0;
+;	ecen4330lab7.c:95: unsigned int count = 0;
 	clr	a
 	mov	_count,a
 	mov	(_count + 1),a
-;	ecen4330lab7.c:107: unsigned char dataRate = 3;
-	mov	_dataRate,#0x03
-;	ecen4330lab7.c:108: unsigned char dataBits = 0;
+;	ecen4330lab7.c:99: unsigned char dataRate = 0;
+;	1-genFromRTrack replaced	mov	_dataRate,#0x00
+	mov	_dataRate,a
+;	ecen4330lab7.c:100: unsigned char dataBits = 0;
 ;	1-genFromRTrack replaced	mov	_dataBits,#0x00
 	mov	_dataBits,a
-;	ecen4330lab7.c:109: unsigned char parity = 2;
+;	ecen4330lab7.c:101: unsigned char parity = 2;
 	mov	_parity,#0x02
-;	ecen4330lab7.c:111: volatile unsigned char received_byte = 0;
+;	ecen4330lab7.c:103: volatile unsigned char received_byte = 0;
 ;	1-genFromRTrack replaced	mov	_received_byte,#0x00
 	mov	_received_byte,a
-;	ecen4330lab7.c:112: volatile unsigned char received_flag = 0;
+;	ecen4330lab7.c:104: volatile unsigned char received_flag = 0;
 ;	1-genFromRTrack replaced	mov	_received_flag,#0x00
 	mov	_received_flag,a
 	.area GSFINAL (CODE)
@@ -677,7 +680,7 @@ __sdcc_program_startup:
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'ISR_receive'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:137: void ISR_receive() __interrupt (4) {
+;	ecen4330lab7.c:131: void ISR_receive() __interrupt (4) {
 ;	-----------------------------------------
 ;	 function ISR_receive
 ;	-----------------------------------------
@@ -705,34 +708,133 @@ _ISR_receive:
 	push	(0+0)
 	push	psw
 	mov	psw,#0x00
-;	ecen4330lab7.c:138: if (RI == 1){
-	jnb	_RI,00102$
-;	ecen4330lab7.c:139: received_byte = SBUF;
+;	ecen4330lab7.c:132: if (RI == 1){
+	jb	_RI,00151$
+	ljmp	00115$
+00151$:
+;	ecen4330lab7.c:133: received_byte = SBUF;
 	mov	_received_byte,_SBUF
-;	ecen4330lab7.c:140: RI = 0;
+;	ecen4330lab7.c:134: RI = 0;
 ;	assignBit
 	clr	_RI
-;	ecen4330lab7.c:141: received_flag = 1;
+;	ecen4330lab7.c:135: received_flag = 1;
 	mov	_received_flag,#0x01
-;	ecen4330lab7.c:142: resetLCD();
+;	ecen4330lab7.c:136: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:143: LCD_string_write("UART data\nreceived.\n\n >> ");
+;	ecen4330lab7.c:141: data = UART_parity_count(received_byte);
+	mov	dpl,_received_byte
+	lcall	_UART_parity_count
+	mov	_data,dpl
+;	ecen4330lab7.c:142: dataBits = SCON & 0xC0;
+	mov	a,_SCON
+	anl	a,#0xc0
+	mov	_dataBits,a
+;	ecen4330lab7.c:143: switch(dataBits) {
+	mov	a,#0x40
+	cjne	a,_dataBits,00152$
+	sjmp	00101$
+00152$:
+	mov	a,#0xc0
+	cjne	a,_dataBits,00153$
+	ljmp	00112$
+00153$:
+	ljmp	00117$
+;	ecen4330lab7.c:145: case 0x40:
+00101$:
+;	ecen4330lab7.c:146: switch(parity) {
+	clr	a
+	cjne	a,_parity,00154$
+	sjmp	00102$
+00154$:
+	mov	a,#0x01
+	cjne	a,_parity,00155$
+	sjmp	00106$
+00155$:
+	mov	a,#0x02
+	cjne	a,_parity,00156$
+	sjmp	00110$
+00156$:
+	ljmp	00117$
+;	ecen4330lab7.c:148: case 0:
+00102$:
+;	ecen4330lab7.c:150: if(data % 2 != 0) {
+	mov	a,_data
+	jnb	acc.0,00104$
+;	ecen4330lab7.c:151: LCD_string_write("Parity\nError.");
 	mov	dptr,#___str_0
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:144: write(received_byte);
+	ljmp	00117$
+00104$:
+;	ecen4330lab7.c:154: received_byte &= 0x7F;  // Clear parity bit
+	anl	_received_byte,#0x7f
+;	ecen4330lab7.c:155: LCD_string_write("UART data\nreceived.\n\n >> ");
+	mov	dptr,#___str_1
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:156: write(received_byte);
 	mov	dpl,_received_byte
 	lcall	_write
-;	ecen4330lab7.c:145: delay(500);
+;	ecen4330lab7.c:157: delay(500);
 	mov	dptr,#0x01f4
 	lcall	_delay
-	sjmp	00104$
-00102$:
-;	ecen4330lab7.c:148: TI = 0;
+;	ecen4330lab7.c:159: break;
+;	ecen4330lab7.c:161: case 1:
+	sjmp	00117$
+00106$:
+;	ecen4330lab7.c:163: if(data % 2 == 0) {
+	mov	a,_data
+	jb	acc.0,00108$
+;	ecen4330lab7.c:164: LCD_string_write("Parity\nError.");
+	mov	dptr,#___str_0
+	mov	b,#0x80
+	lcall	_LCD_string_write
+	sjmp	00117$
+00108$:
+;	ecen4330lab7.c:167: received_byte &= 0x7F;  // Clear parity bit
+	anl	_received_byte,#0x7f
+;	ecen4330lab7.c:168: LCD_string_write("UART data\nreceived.\n\n >> ");
+	mov	dptr,#___str_1
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:169: write(received_byte);
+	mov	dpl,_received_byte
+	lcall	_write
+;	ecen4330lab7.c:170: delay(500);
+	mov	dptr,#0x01f4
+	lcall	_delay
+;	ecen4330lab7.c:172: break;
+;	ecen4330lab7.c:174: case 2:
+	sjmp	00117$
+00110$:
+;	ecen4330lab7.c:175: received_byte &= 0x7F;  // Clear parity bit
+	anl	_received_byte,#0x7f
+;	ecen4330lab7.c:176: LCD_string_write("UART data\nreceived.\n\n >> ");
+	mov	dptr,#___str_1
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:177: write(received_byte);
+	mov	dpl,_received_byte
+	lcall	_write
+;	ecen4330lab7.c:178: delay(500);
+	mov	dptr,#0x01f4
+	lcall	_delay
+;	ecen4330lab7.c:180: break;
+;	ecen4330lab7.c:182: case 0xC0:
+	sjmp	00117$
+00112$:
+;	ecen4330lab7.c:183: LCD_string_write("9\n");
+	mov	dptr,#___str_2
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:185: }
+	sjmp	00117$
+00115$:
+;	ecen4330lab7.c:188: TI = 0;
 ;	assignBit
 	clr	_TI
-00104$:
-;	ecen4330lab7.c:150: }
+00117$:
+;	ecen4330lab7.c:190: }
 	pop	psw
 	pop	(0+0)
 	pop	(0+1)
@@ -751,43 +853,45 @@ _ISR_receive:
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'UART_Init'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:158: void UART_Init(){
+;	ecen4330lab7.c:198: void UART_Init(){
 ;	-----------------------------------------
 ;	 function UART_Init
 ;	-----------------------------------------
 _UART_Init:
-;	ecen4330lab7.c:159: SCON = 0x50;  // Asynchronous mode, 8-bit data and 1-stop bit
+;	ecen4330lab7.c:199: SCON = 0x50;  // Asynchronous mode, 8-bit data and 1-stop bit
 	mov	_SCON,#0x50
-;	ecen4330lab7.c:161: TMOD = 0x20;  // Timer1 in Mode2. in 8 bit auto reload
+;	ecen4330lab7.c:200: PCON &= 0x7F; // 
+	anl	_PCON,#0x7f
+;	ecen4330lab7.c:201: TMOD = 0x20;  // Timer1 in Mode2. in 8 bit auto reload
 	mov	_TMOD,#0x20
-;	ecen4330lab7.c:162: TH1 =  0xFD;  // Load timer value for 9600 baudrate
+;	ecen4330lab7.c:202: TH1 =  0xFD;  // Load timer value for 9600 baudrate
 	mov	_TH1,#0xfd
-;	ecen4330lab7.c:163: TR1 = 1;      // Turn ON the timer for Baud rate generation
+;	ecen4330lab7.c:203: TR1 = 1;      // Turn ON the timer for Baud rate generation
 ;	assignBit
 	setb	_TR1
-;	ecen4330lab7.c:164: ES  = 1;      // Enable Serial Interrupt
+;	ecen4330lab7.c:204: ES  = 1;      // Enable Serial Interrupt
 ;	assignBit
 	setb	_ES
-;	ecen4330lab7.c:165: EA  = 1;      // Enable Global Interrupt bit
+;	ecen4330lab7.c:205: EA  = 1;      // Enable Global Interrupt bit
 ;	assignBit
 	setb	_EA
-;	ecen4330lab7.c:166: }
+;	ecen4330lab7.c:206: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'UART_transmit'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:174: void UART_transmit(){
+;	ecen4330lab7.c:214: void UART_transmit(){
 ;	-----------------------------------------
 ;	 function UART_transmit
 ;	-----------------------------------------
 _UART_transmit:
-;	ecen4330lab7.c:177: while(TI == 1);
+;	ecen4330lab7.c:217: while(TI == 1);
 00101$:
 	jb	_TI,00101$
-;	ecen4330lab7.c:179: TI = 0;
+;	ecen4330lab7.c:219: TI = 0;
 ;	assignBit
 	clr	_TI
-;	ecen4330lab7.c:180: }
+;	ecen4330lab7.c:220: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'delay'
@@ -796,14 +900,14 @@ _UART_transmit:
 ;i                         Allocated to registers r4 r5 
 ;j                         Allocated to registers r2 r3 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:214: void delay (int d) /// x 1ms
+;	ecen4330lab7.c:254: void delay (int d) /// x 1ms
 ;	-----------------------------------------
 ;	 function delay
 ;	-----------------------------------------
 _delay:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:217: for (i=0;i<d;i++)
+;	ecen4330lab7.c:257: for (i=0;i<d;i++)
 	mov	r4,#0x00
 	mov	r5,#0x00
 00107$:
@@ -816,7 +920,7 @@ _delay:
 	xrl	b,#0x80
 	subb	a,b
 	jnc	00109$
-;	ecen4330lab7.c:219: for (j=0;j<1000;j++);
+;	ecen4330lab7.c:259: for (j=0;j<1000;j++);
 	mov	r2,#0xe8
 	mov	r3,#0x03
 00105$:
@@ -827,13 +931,13 @@ _delay:
 	mov	a,r2
 	orl	a,r3
 	jnz	00105$
-;	ecen4330lab7.c:217: for (i=0;i<d;i++)
+;	ecen4330lab7.c:257: for (i=0;i<d;i++)
 	inc	r4
 	cjne	r4,#0x00,00107$
 	inc	r5
 	sjmp	00107$
 00109$:
-;	ecen4330lab7.c:221: }
+;	ecen4330lab7.c:261: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'writeRegister8'
@@ -841,16 +945,16 @@ _delay:
 ;d                         Allocated with name '_writeRegister8_PARM_2'
 ;a                         Allocated to registers r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:229: void writeRegister8(u8 a, u8 d) {
+;	ecen4330lab7.c:269: void writeRegister8(u8 a, u8 d) {
 ;	-----------------------------------------
 ;	 function writeRegister8
 ;	-----------------------------------------
 _writeRegister8:
 	mov	r7,dpl
-;	ecen4330lab7.c:230: CD = __CMD__;
+;	ecen4330lab7.c:270: CD = __CMD__;
 ;	assignBit
 	clr	_P3_5
-;	ecen4330lab7.c:231: write8(a);
+;	ecen4330lab7.c:271: write8(a);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -859,10 +963,10 @@ _writeRegister8:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:232: CD = __DATA__;
+;	ecen4330lab7.c:272: CD = __DATA__;
 ;	assignBit
 	setb	_P3_5
-;	ecen4330lab7.c:233: write8(d);
+;	ecen4330lab7.c:273: write8(d);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -871,7 +975,7 @@ _writeRegister8:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:234: }
+;	ecen4330lab7.c:274: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'writeRegister16'
@@ -881,17 +985,17 @@ _writeRegister8:
 ;hi                        Allocated to registers r6 r7 
 ;lo                        Allocated to registers r4 r5 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:242: void writeRegister16(u16 a, u16 d){
+;	ecen4330lab7.c:282: void writeRegister16(u16 a, u16 d){
 ;	-----------------------------------------
 ;	 function writeRegister16
 ;	-----------------------------------------
 _writeRegister16:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:244: hi = (a) >> 8;
+;	ecen4330lab7.c:284: hi = (a) >> 8;
 	mov	ar4,r7
-;	ecen4330lab7.c:245: lo = (a);
-;	ecen4330lab7.c:246: write8Reg(hi);
+;	ecen4330lab7.c:285: lo = (a);
+;	ecen4330lab7.c:286: write8Reg(hi);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -902,7 +1006,7 @@ _writeRegister16:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:247: write8Reg(lo);
+;	ecen4330lab7.c:287: write8Reg(lo);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -913,14 +1017,14 @@ _writeRegister16:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:248: hi = (d) >> 8;
+;	ecen4330lab7.c:288: hi = (d) >> 8;
 	mov	r6,(_writeRegister16_PARM_2 + 1)
-;	ecen4330lab7.c:249: lo = (d);
+;	ecen4330lab7.c:289: lo = (d);
 	mov	r4,_writeRegister16_PARM_2
-;	ecen4330lab7.c:250: CD = 1 ;
+;	ecen4330lab7.c:290: CD = 1 ;
 ;	assignBit
 	setb	_P3_5
-;	ecen4330lab7.c:251: write8Data(hi);
+;	ecen4330lab7.c:291: write8Data(hi);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -931,7 +1035,7 @@ _writeRegister16:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:252: write8Data(lo);
+;	ecen4330lab7.c:292: write8Data(lo);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -942,27 +1046,27 @@ _writeRegister16:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:253: }
+;	ecen4330lab7.c:293: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'rtcInit'
 ;------------------------------------------------------------
-;i                         Allocated with name '_rtcInit_i_65536_64'
+;i                         Allocated with name '_rtcInit_i_65536_71'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:275: void rtcInit(void) {
+;	ecen4330lab7.c:315: void rtcInit(void) {
 ;	-----------------------------------------
 ;	 function rtcInit
 ;	-----------------------------------------
 _rtcInit:
-;	ecen4330lab7.c:278: rtcCmd(__REG_F__, __HR_24__|__STOP__|__RESET__);  // stop and reset
+;	ecen4330lab7.c:318: rtcCmd(__REG_F__, __HR_24__|__STOP__|__RESET__);  // stop and reset
 	mov	_rtcCmd_PARM_2,#0x07
 	mov	dptr,#0x000f
 	lcall	_rtcCmd
-;	ecen4330lab7.c:281: for (i = __S1_REG__; i < __REG_D__;i++) {
+;	ecen4330lab7.c:321: for (i = __S1_REG__; i < __REG_D__;i++) {
 	mov	r6,#0x00
 	mov	r7,#0x00
 00102$:
-;	ecen4330lab7.c:282: rtcWrite(i, 0x00);
+;	ecen4330lab7.c:322: rtcWrite(i, 0x00);
 	mov	_rtcWrite_PARM_2,#0x00
 	mov	dpl,r6
 	mov	dph,r7
@@ -971,7 +1075,7 @@ _rtcInit:
 	lcall	_rtcWrite
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:281: for (i = __S1_REG__; i < __REG_D__;i++) {
+;	ecen4330lab7.c:321: for (i = __S1_REG__; i < __REG_D__;i++) {
 	inc	r6
 	cjne	r6,#0x00,00115$
 	inc	r7
@@ -982,10 +1086,10 @@ _rtcInit:
 	mov	a,r7
 	subb	a,#0x00
 	jc	00102$
-;	ecen4330lab7.c:285: rtcCmd(__REG_F__, __HR_24__);
+;	ecen4330lab7.c:325: rtcCmd(__REG_F__, __HR_24__);
 	mov	_rtcCmd_PARM_2,#0x04
 	mov	dptr,#0x000f
-;	ecen4330lab7.c:286: }
+;	ecen4330lab7.c:326: }
 	ljmp	_rtcCmd
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'rtcBusy'
@@ -995,28 +1099,28 @@ _rtcInit:
 ;__1310720002              Allocated to registers 
 ;map_address               Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:294: void rtcBusy(void) {
+;	ecen4330lab7.c:334: void rtcBusy(void) {
 ;	-----------------------------------------
 ;	 function rtcBusy
 ;	-----------------------------------------
 _rtcBusy:
-;	ecen4330lab7.c:296: while((ioread8(map_address) & 0x02));
+;	ecen4330lab7.c:336: while((ioread8(map_address) & 0x02));
 00101$:
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dptr,#0x000d
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
+;	ecen4330lab7.c:245: return data;   
 	mov	a,_data
-;	ecen4330lab7.c:296: while((ioread8(map_address) & 0x02));
+;	ecen4330lab7.c:336: while((ioread8(map_address) & 0x02));
 	jb	acc.1,00101$
-;	ecen4330lab7.c:297: }
+;	ecen4330lab7.c:337: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'rtcCmd'
@@ -1029,25 +1133,25 @@ _rtcBusy:
 ;map_address               Allocated to registers 
 ;d                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:305: inline void rtcCmd(unsigned int addr, unsigned char d) {
+;	ecen4330lab7.c:345: inline void rtcCmd(unsigned int addr, unsigned char d) {
 ;	-----------------------------------------
 ;	 function rtcCmd
 ;	-----------------------------------------
 _rtcCmd:
-;	ecen4330lab7.c:306: __xdata unsigned char* map_address =  (unsigned char __xdata*) addr;
-;	ecen4330lab7.c:307: iowrite8(map_address, d);
+;	ecen4330lab7.c:346: __xdata unsigned char* map_address =  (unsigned char __xdata*) addr;
+;	ecen4330lab7.c:347: iowrite8(map_address, d);
 	mov	r7,_rtcCmd_PARM_2
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,r7
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:307: iowrite8(map_address, d);
-;	ecen4330lab7.c:308: }
+;	ecen4330lab7.c:347: iowrite8(map_address, d);
+;	ecen4330lab7.c:348: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'rtcWrite'
@@ -1078,55 +1182,55 @@ _rtcCmd:
 ;map_address               Allocated to registers 
 ;d                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:316: inline void rtcWrite(unsigned int addr, unsigned char d) {
+;	ecen4330lab7.c:356: inline void rtcWrite(unsigned int addr, unsigned char d) {
 ;	-----------------------------------------
 ;	 function rtcWrite
 ;	-----------------------------------------
 _rtcWrite:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:317: __xdata unsigned char* map_address =  (unsigned char __xdata*) addr;
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:357: __xdata unsigned char* map_address =  (unsigned char __xdata*) addr;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:319: rtcBusy();
+;	ecen4330lab7.c:359: rtcBusy();
 	push	ar7
 	push	ar6
 	lcall	_rtcBusy
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dpl,r6
 	mov	dph,r7
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:321: rtcCmd(__REG_D__, d);
+;	ecen4330lab7.c:361: rtcCmd(__REG_D__, d);
 	mov	r7,_rtcWrite_PARM_2
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,r7
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:321: rtcCmd(__REG_D__, d);
-;	ecen4330lab7.c:322: }
+;	ecen4330lab7.c:361: rtcCmd(__REG_D__, d);
+;	ecen4330lab7.c:362: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'rtcRead'
@@ -1155,60 +1259,60 @@ _rtcWrite:
 ;map_address               Allocated to registers 
 ;d                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:331: inline unsigned char rtcRead(unsigned int addr) {
+;	ecen4330lab7.c:371: inline unsigned char rtcRead(unsigned int addr) {
 ;	-----------------------------------------
 ;	 function rtcRead
 ;	-----------------------------------------
 _rtcRead:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:332: __xdata unsigned char* map_address =  (unsigned char __xdata*) addr;
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:372: __xdata unsigned char* map_address =  (unsigned char __xdata*) addr;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:334: rtcBusy();
+;	ecen4330lab7.c:374: rtcBusy();
 	push	ar7
 	push	ar6
 	lcall	_rtcBusy
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dpl,r6
 	mov	dph,r7
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
-;	ecen4330lab7.c:337: data = (data & 0x0F) | 0x30; // ascii the lower word
+;	ecen4330lab7.c:245: return data;   
+;	ecen4330lab7.c:377: data = (data & 0x0F) | 0x30; // ascii the lower word
 	mov	a,_data
 	anl	a,#0x0f
 	orl	a,#0x30
 	mov	_data,a
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:339: return data;
+;	ecen4330lab7.c:379: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:340: }
+;	ecen4330lab7.c:380: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'rtcPrint'
@@ -1365,300 +1469,300 @@ _rtcRead:
 ;map_address               Allocated to registers 
 ;d                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:349: void rtcPrint(void) {
+;	ecen4330lab7.c:389: void rtcPrint(void) {
 ;	-----------------------------------------
 ;	 function rtcPrint
 ;	-----------------------------------------
 _rtcPrint:
-;	ecen4330lab7.c:352: xCursorHold = cursor_x;
+;	ecen4330lab7.c:392: xCursorHold = cursor_x;
 	mov	_xCursorHold,_cursor_x
-;	ecen4330lab7.c:353: yCursorHold = cursor_y;
+;	ecen4330lab7.c:393: yCursorHold = cursor_y;
 	mov	_yCursorHold,_cursor_y
-;	ecen4330lab7.c:354: textSizeHold = textsize;
+;	ecen4330lab7.c:394: textSizeHold = textsize;
 	mov	_textSizeHold,_textsize
-;	ecen4330lab7.c:356: setTextColor(GRAY, BLACK);
+;	ecen4330lab7.c:396: setTextColor(GRAY, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xd6ba
 	lcall	_setTextColor
-;	ecen4330lab7.c:357: setTextSize(2);
+;	ecen4330lab7.c:397: setTextSize(2);
 	mov	dpl,#0x02
 	lcall	_setTextSize
-;	ecen4330lab7.c:358: setCursor(132, 304);
+;	ecen4330lab7.c:398: setCursor(132, 304);
 	mov	_setCursor_PARM_2,#0x30
 	mov	(_setCursor_PARM_2 + 1),#0x01
 	mov	dptr,#0x0084
 	lcall	_setCursor
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:334: rtcBusy();
+;	ecen4330lab7.c:374: rtcBusy();
 	lcall	_rtcBusy
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dptr,#0x0005
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
-;	ecen4330lab7.c:337: data = (data & 0x0F) | 0x30; // ascii the lower word
+;	ecen4330lab7.c:245: return data;   
+;	ecen4330lab7.c:377: data = (data & 0x0F) | 0x30; // ascii the lower word
 	mov	a,_data
 	anl	a,#0x0f
 	orl	a,#0x30
 	mov	_data,a
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:339: return data;
+;	ecen4330lab7.c:379: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:361: write(t);
+;	ecen4330lab7.c:401: write(t);
 	lcall	_write
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:334: rtcBusy();
+;	ecen4330lab7.c:374: rtcBusy();
 	lcall	_rtcBusy
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dptr,#0x0004
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
-;	ecen4330lab7.c:337: data = (data & 0x0F) | 0x30; // ascii the lower word
+;	ecen4330lab7.c:245: return data;   
+;	ecen4330lab7.c:377: data = (data & 0x0F) | 0x30; // ascii the lower word
 	mov	a,_data
 	anl	a,#0x0f
 	orl	a,#0x30
 	mov	_data,a
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:339: return data;
+;	ecen4330lab7.c:379: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:363: write(t);
+;	ecen4330lab7.c:403: write(t);
 	lcall	_write
-;	ecen4330lab7.c:364: LCD_string_write(":");
-	mov	dptr,#___str_1
+;	ecen4330lab7.c:404: LCD_string_write(":");
+	mov	dptr,#___str_3
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:334: rtcBusy();
+;	ecen4330lab7.c:374: rtcBusy();
 	lcall	_rtcBusy
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dptr,#0x0003
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
-;	ecen4330lab7.c:337: data = (data & 0x0F) | 0x30; // ascii the lower word
+;	ecen4330lab7.c:245: return data;   
+;	ecen4330lab7.c:377: data = (data & 0x0F) | 0x30; // ascii the lower word
 	mov	a,_data
 	anl	a,#0x0f
 	orl	a,#0x30
 	mov	_data,a
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:339: return data;
+;	ecen4330lab7.c:379: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:366: write(t);
+;	ecen4330lab7.c:406: write(t);
 	lcall	_write
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:334: rtcBusy();
+;	ecen4330lab7.c:374: rtcBusy();
 	lcall	_rtcBusy
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dptr,#0x0002
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
-;	ecen4330lab7.c:337: data = (data & 0x0F) | 0x30; // ascii the lower word
+;	ecen4330lab7.c:245: return data;   
+;	ecen4330lab7.c:377: data = (data & 0x0F) | 0x30; // ascii the lower word
 	mov	a,_data
 	anl	a,#0x0f
 	orl	a,#0x30
 	mov	_data,a
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:339: return data;
+;	ecen4330lab7.c:379: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:368: write(t);
+;	ecen4330lab7.c:408: write(t);
 	lcall	_write
-;	ecen4330lab7.c:369: LCD_string_write(":");
-	mov	dptr,#___str_1
+;	ecen4330lab7.c:409: LCD_string_write(":");
+	mov	dptr,#___str_3
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:334: rtcBusy();
+;	ecen4330lab7.c:374: rtcBusy();
 	lcall	_rtcBusy
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dptr,#0x0001
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
-;	ecen4330lab7.c:337: data = (data & 0x0F) | 0x30; // ascii the lower word
+;	ecen4330lab7.c:245: return data;   
+;	ecen4330lab7.c:377: data = (data & 0x0F) | 0x30; // ascii the lower word
 	mov	a,_data
 	anl	a,#0x0f
 	orl	a,#0x30
 	mov	_data,a
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:339: return data;
+;	ecen4330lab7.c:379: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:371: write(t);
+;	ecen4330lab7.c:411: write(t);
 	lcall	_write
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	mov	a,#0x01
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:334: rtcBusy();
+;	ecen4330lab7.c:374: rtcBusy();
 	lcall	_rtcBusy
-;	ecen4330lab7.c:202: IOM = 1;                            
+;	ecen4330lab7.c:242: IOM = 1;                            
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:203: data = *map_address;
+;	ecen4330lab7.c:243: data = *map_address;
 	mov	dptr,#0x0000
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:204: IOM = 0;    
+;	ecen4330lab7.c:244: IOM = 0;    
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:205: return data;   
-;	ecen4330lab7.c:337: data = (data & 0x0F) | 0x30; // ascii the lower word
+;	ecen4330lab7.c:245: return data;   
+;	ecen4330lab7.c:377: data = (data & 0x0F) | 0x30; // ascii the lower word
 	mov	a,_data
 	anl	a,#0x0f
 	orl	a,#0x30
 	mov	_data,a
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	dptr,#0x000d
 	clr	a
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:339: return data;
+;	ecen4330lab7.c:379: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:373: write(t);
+;	ecen4330lab7.c:413: write(t);
 	lcall	_write
-;	ecen4330lab7.c:375: cursor_x = xCursorHold;
+;	ecen4330lab7.c:415: cursor_x = xCursorHold;
 	mov	_cursor_x,_xCursorHold
 	mov	(_cursor_x + 1),#0x00
-;	ecen4330lab7.c:376: cursor_y = yCursorHold;
+;	ecen4330lab7.c:416: cursor_y = yCursorHold;
 	mov	_cursor_y,_yCursorHold
 	mov	(_cursor_y + 1),#0x00
-;	ecen4330lab7.c:377: textsize = textSizeHold;
+;	ecen4330lab7.c:417: textsize = textSizeHold;
 	mov	_textsize,_textSizeHold
-;	ecen4330lab7.c:378: }
+;	ecen4330lab7.c:418: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'setCursor'
@@ -1666,17 +1770,17 @@ _rtcPrint:
 ;y                         Allocated with name '_setCursor_PARM_2'
 ;x                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:398: void setCursor(u16 x, u16 y){
+;	ecen4330lab7.c:438: void setCursor(u16 x, u16 y){
 ;	-----------------------------------------
 ;	 function setCursor
 ;	-----------------------------------------
 _setCursor:
 	mov	_cursor_x,dpl
 	mov	(_cursor_x + 1),dph
-;	ecen4330lab7.c:400: cursor_y = y;
+;	ecen4330lab7.c:440: cursor_y = y;
 	mov	_cursor_y,_setCursor_PARM_2
 	mov	(_cursor_y + 1),(_setCursor_PARM_2 + 1)
-;	ecen4330lab7.c:401: }
+;	ecen4330lab7.c:441: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'setTextColor'
@@ -1684,36 +1788,36 @@ _setCursor:
 ;y                         Allocated with name '_setTextColor_PARM_2'
 ;x                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:409: void setTextColor(u16 x, u16 y){
+;	ecen4330lab7.c:449: void setTextColor(u16 x, u16 y){
 ;	-----------------------------------------
 ;	 function setTextColor
 ;	-----------------------------------------
 _setTextColor:
 	mov	_textcolor,dpl
 	mov	(_textcolor + 1),dph
-;	ecen4330lab7.c:411: textbgcolor = y;
+;	ecen4330lab7.c:451: textbgcolor = y;
 	mov	_textbgcolor,_setTextColor_PARM_2
 	mov	(_textbgcolor + 1),(_setTextColor_PARM_2 + 1)
-;	ecen4330lab7.c:412: }
+;	ecen4330lab7.c:452: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'setTextSize'
 ;------------------------------------------------------------
 ;s                         Allocated to registers r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:420: void setTextSize(u8 s){
+;	ecen4330lab7.c:460: void setTextSize(u8 s){
 ;	-----------------------------------------
 ;	 function setTextSize
 ;	-----------------------------------------
 _setTextSize:
-;	ecen4330lab7.c:421: if (s > 8) return;
+;	ecen4330lab7.c:461: if (s > 8) return;
 	mov	a,dpl
 	mov	r7,a
 	add	a,#0xff - 0x08
 	jnc	00102$
 	ret
 00102$:
-;	ecen4330lab7.c:422: textsize = (s>0) ? s : 1 ;
+;	ecen4330lab7.c:462: textsize = (s>0) ? s : 1 ;
 	mov	a,r7
 	jz	00105$
 	mov	ar6,r7
@@ -1724,26 +1828,26 @@ _setTextSize:
 	mov	r7,#0x00
 00106$:
 	mov	_textsize,r6
-;	ecen4330lab7.c:423: }
+;	ecen4330lab7.c:463: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'setRotation'
 ;------------------------------------------------------------
 ;flag                      Allocated to registers r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:431: void setRotation(u8 flag){
+;	ecen4330lab7.c:471: void setRotation(u8 flag){
 ;	-----------------------------------------
 ;	 function setRotation
 ;	-----------------------------------------
 _setRotation:
-;	ecen4330lab7.c:432: switch(flag) {
+;	ecen4330lab7.c:472: switch(flag) {
 	mov	a,dpl
 	mov	r7,a
 	add	a,#0xff - 0x03
 	jc	00105$
 	mov	a,r7
 	add	a,r7
-;	ecen4330lab7.c:433: case 0:
+;	ecen4330lab7.c:473: case 0:
 	mov	dptr,#00115$
 	jmp	@a+dptr
 00115$:
@@ -1752,68 +1856,68 @@ _setRotation:
 	sjmp	00103$
 	sjmp	00104$
 00101$:
-;	ecen4330lab7.c:434: flag = (ILI9341_MADCTL_MX | ILI9341_MADCTL_BGR);
+;	ecen4330lab7.c:474: flag = (ILI9341_MADCTL_MX | ILI9341_MADCTL_BGR);
 	mov	r7,#0x48
-;	ecen4330lab7.c:435: _width = TFTWIDTH;
+;	ecen4330lab7.c:475: _width = TFTWIDTH;
 	mov	__width,#0xf0
 	mov	(__width + 1),#0x00
-;	ecen4330lab7.c:436: _height = TFTHEIGHT;
+;	ecen4330lab7.c:476: _height = TFTHEIGHT;
 	mov	__height,#0x40
 	mov	(__height + 1),#0x01
-;	ecen4330lab7.c:437: break;
-;	ecen4330lab7.c:438: case 1:
+;	ecen4330lab7.c:477: break;
+;	ecen4330lab7.c:478: case 1:
 	sjmp	00106$
 00102$:
-;	ecen4330lab7.c:439: flag = (ILI9341_MADCTL_MV | ILI9341_MADCTL_BGR);
+;	ecen4330lab7.c:479: flag = (ILI9341_MADCTL_MV | ILI9341_MADCTL_BGR);
 	mov	r7,#0x28
-;	ecen4330lab7.c:440: _width = TFTHEIGHT;
+;	ecen4330lab7.c:480: _width = TFTHEIGHT;
 	mov	__width,#0x40
 	mov	(__width + 1),#0x01
-;	ecen4330lab7.c:441: _height = TFTWIDTH;
+;	ecen4330lab7.c:481: _height = TFTWIDTH;
 	mov	__height,#0xf0
 	mov	(__height + 1),#0x00
-;	ecen4330lab7.c:442: break;
-;	ecen4330lab7.c:443: case 2:
+;	ecen4330lab7.c:482: break;
+;	ecen4330lab7.c:483: case 2:
 	sjmp	00106$
 00103$:
-;	ecen4330lab7.c:444: flag = (ILI9341_MADCTL_MY | ILI9341_MADCTL_BGR);
+;	ecen4330lab7.c:484: flag = (ILI9341_MADCTL_MY | ILI9341_MADCTL_BGR);
 	mov	r7,#0x88
-;	ecen4330lab7.c:445: _width = TFTWIDTH;
+;	ecen4330lab7.c:485: _width = TFTWIDTH;
 	mov	__width,#0xf0
 	mov	(__width + 1),#0x00
-;	ecen4330lab7.c:446: _height = TFTHEIGHT;
+;	ecen4330lab7.c:486: _height = TFTHEIGHT;
 	mov	__height,#0x40
 	mov	(__height + 1),#0x01
-;	ecen4330lab7.c:447: break;
-;	ecen4330lab7.c:448: case 3:
+;	ecen4330lab7.c:487: break;
+;	ecen4330lab7.c:488: case 3:
 	sjmp	00106$
 00104$:
-;	ecen4330lab7.c:449: flag = (ILI9341_MADCTL_MX | ILI9341_MADCTL_MY | ILI9341_MADCTL_MV | ILI9341_MADCTL_BGR);
+;	ecen4330lab7.c:489: flag = (ILI9341_MADCTL_MX | ILI9341_MADCTL_MY | ILI9341_MADCTL_MV | ILI9341_MADCTL_BGR);
 	mov	r7,#0xe8
-;	ecen4330lab7.c:450: _width = TFTHEIGHT;
+;	ecen4330lab7.c:490: _width = TFTHEIGHT;
 	mov	__width,#0x40
 	mov	(__width + 1),#0x01
-;	ecen4330lab7.c:451: _height = TFTWIDTH;
+;	ecen4330lab7.c:491: _height = TFTWIDTH;
 	mov	__height,#0xf0
 	mov	(__height + 1),#0x00
-;	ecen4330lab7.c:452: break;
-;	ecen4330lab7.c:453: default:
+;	ecen4330lab7.c:492: break;
+;	ecen4330lab7.c:493: default:
 	sjmp	00106$
 00105$:
-;	ecen4330lab7.c:454: flag = (ILI9341_MADCTL_MX | ILI9341_MADCTL_BGR);
+;	ecen4330lab7.c:494: flag = (ILI9341_MADCTL_MX | ILI9341_MADCTL_BGR);
 	mov	r7,#0x48
-;	ecen4330lab7.c:455: _width = TFTWIDTH;
+;	ecen4330lab7.c:495: _width = TFTWIDTH;
 	mov	__width,#0xf0
 	mov	(__width + 1),#0x00
-;	ecen4330lab7.c:456: _height = TFTHEIGHT;
+;	ecen4330lab7.c:496: _height = TFTHEIGHT;
 	mov	__height,#0x40
 	mov	(__height + 1),#0x01
-;	ecen4330lab7.c:458: }
+;	ecen4330lab7.c:498: }
 00106$:
-;	ecen4330lab7.c:459: writeRegister8(ILI9341_MEMCONTROL, flag);
+;	ecen4330lab7.c:499: writeRegister8(ILI9341_MEMCONTROL, flag);
 	mov	_writeRegister8_PARM_2,r7
 	mov	dpl,#0x36
-;	ecen4330lab7.c:460: }
+;	ecen4330lab7.c:500: }
 	ljmp	_writeRegister8
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'setAddress'
@@ -1823,14 +1927,14 @@ _setRotation:
 ;y2                        Allocated with name '_setAddress_PARM_4'
 ;x1                        Allocated to registers r6 r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:469: void setAddress(unsigned int x1,unsigned int y1,unsigned int x2,unsigned int y2){
+;	ecen4330lab7.c:509: void setAddress(unsigned int x1,unsigned int y1,unsigned int x2,unsigned int y2){
 ;	-----------------------------------------
 ;	 function setAddress
 ;	-----------------------------------------
 _setAddress:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:470: write8Reg(0x2A);
+;	ecen4330lab7.c:510: write8Reg(0x2A);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -1841,7 +1945,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:471: write8Data(x1 >> 8);
+;	ecen4330lab7.c:511: write8Data(x1 >> 8);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1853,7 +1957,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:472: write8Data(x1);
+;	ecen4330lab7.c:512: write8Data(x1);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1864,7 +1968,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:473: write8Data(x2 >> 8);
+;	ecen4330lab7.c:513: write8Data(x2 >> 8);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1875,7 +1979,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:474: write8Data(x2);
+;	ecen4330lab7.c:514: write8Data(x2);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1886,7 +1990,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:475: write8Reg(0x2B);
+;	ecen4330lab7.c:515: write8Reg(0x2B);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -1897,7 +2001,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:476: write8Data(y1 >> 8);
+;	ecen4330lab7.c:516: write8Data(y1 >> 8);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1908,7 +2012,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:477: write8Data(y1);
+;	ecen4330lab7.c:517: write8Data(y1);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1919,7 +2023,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:478: write8Data(y2 >> 8);
+;	ecen4330lab7.c:518: write8Data(y2 >> 8);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1930,7 +2034,7 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:479: write8Data(y2);
+;	ecen4330lab7.c:519: write8Data(y2);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1941,29 +2045,29 @@ _setAddress:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:480: }
+;	ecen4330lab7.c:520: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'TFT_LCD_INIT'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:488: void TFT_LCD_INIT(void){
+;	ecen4330lab7.c:528: void TFT_LCD_INIT(void){
 ;	-----------------------------------------
 ;	 function TFT_LCD_INIT
 ;	-----------------------------------------
 _TFT_LCD_INIT:
-;	ecen4330lab7.c:489: _width = TFTWIDTH;
+;	ecen4330lab7.c:529: _width = TFTWIDTH;
 	mov	__width,#0xf0
 	mov	(__width + 1),#0x00
-;	ecen4330lab7.c:490: _height = TFTHEIGHT;
+;	ecen4330lab7.c:530: _height = TFTHEIGHT;
 	mov	__height,#0x40
 	mov	(__height + 1),#0x01
-;	ecen4330lab7.c:492: IOM = 0;
+;	ecen4330lab7.c:532: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:493: CD = 1;
+;	ecen4330lab7.c:533: CD = 1;
 ;	assignBit
 	setb	_P3_5
-;	ecen4330lab7.c:495: write8Reg(0x00);
+;	ecen4330lab7.c:535: write8Reg(0x00);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -1974,7 +2078,7 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:496: write8Data(0x00);
+;	ecen4330lab7.c:536: write8Data(0x00);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1985,7 +2089,7 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:497: write8Data(0x00);
+;	ecen4330lab7.c:537: write8Data(0x00);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -1996,7 +2100,7 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:498: write8Data(0x00);
+;	ecen4330lab7.c:538: write8Data(0x00);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -2007,32 +2111,32 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:499: delay(200);
+;	ecen4330lab7.c:539: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:501: writeRegister8(ILI9341_SOFTRESET, 0);
+;	ecen4330lab7.c:541: writeRegister8(ILI9341_SOFTRESET, 0);
 	mov	_writeRegister8_PARM_2,#0x00
 	mov	dpl,#0x01
 	lcall	_writeRegister8
-;	ecen4330lab7.c:502: delay(50);
+;	ecen4330lab7.c:542: delay(50);
 	mov	dptr,#0x0032
 	lcall	_delay
-;	ecen4330lab7.c:504: writeRegister8(ILI9341_DISPLAYOFF, 0);
+;	ecen4330lab7.c:544: writeRegister8(ILI9341_DISPLAYOFF, 0);
 	mov	_writeRegister8_PARM_2,#0x00
 	mov	dpl,#0x28
 	lcall	_writeRegister8
-;	ecen4330lab7.c:505: delay(10);
+;	ecen4330lab7.c:545: delay(10);
 	mov	dptr,#0x000a
 	lcall	_delay
-;	ecen4330lab7.c:507: writeRegister8(ILI9341_POWERCONTROL1, 0x23);
+;	ecen4330lab7.c:547: writeRegister8(ILI9341_POWERCONTROL1, 0x23);
 	mov	_writeRegister8_PARM_2,#0x23
 	mov	dpl,#0xc0
 	lcall	_writeRegister8
-;	ecen4330lab7.c:508: writeRegister8(ILI9341_POWERCONTROL2, 0x11);
+;	ecen4330lab7.c:548: writeRegister8(ILI9341_POWERCONTROL2, 0x11);
 	mov	_writeRegister8_PARM_2,#0x11
 	mov	dpl,#0xc1
 	lcall	_writeRegister8
-;	ecen4330lab7.c:509: write8Reg(ILI9341_VCOMCONTROL1);
+;	ecen4330lab7.c:549: write8Reg(ILI9341_VCOMCONTROL1);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -2043,7 +2147,7 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:510: write8Data(0x3d);
+;	ecen4330lab7.c:550: write8Data(0x3d);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -2054,7 +2158,7 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:511: write8Data(0x30);
+;	ecen4330lab7.c:551: write8Data(0x30);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -2065,15 +2169,15 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:512: writeRegister8(ILI9341_VCOMCONTROL2, 0xaa);
+;	ecen4330lab7.c:552: writeRegister8(ILI9341_VCOMCONTROL2, 0xaa);
 	mov	_writeRegister8_PARM_2,#0xaa
 	mov	dpl,#0xc7
 	lcall	_writeRegister8
-;	ecen4330lab7.c:513: writeRegister8(ILI9341_MEMCONTROL, ILI9341_MADCTL_MY | ILI9341_MADCTL_BGR);
+;	ecen4330lab7.c:553: writeRegister8(ILI9341_MEMCONTROL, ILI9341_MADCTL_MY | ILI9341_MADCTL_BGR);
 	mov	_writeRegister8_PARM_2,#0x88
 	mov	dpl,#0x36
 	lcall	_writeRegister8
-;	ecen4330lab7.c:514: write8Reg(ILI9341_PIXELFORMAT);
+;	ecen4330lab7.c:554: write8Reg(ILI9341_PIXELFORMAT);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -2084,7 +2188,7 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:515: write8Data(0x55);
+;	ecen4330lab7.c:555: write8Data(0x55);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -2095,7 +2199,7 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:516: write8Data(0x00);
+;	ecen4330lab7.c:556: write8Data(0x00);
 ;	assignBit
 	setb	_P3_5
 ;	assignBit
@@ -2106,30 +2210,30 @@ _TFT_LCD_INIT:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:517: writeRegister16(ILI9341_FRAMECONTROL, 0x001B);
+;	ecen4330lab7.c:557: writeRegister16(ILI9341_FRAMECONTROL, 0x001B);
 	mov	_writeRegister16_PARM_2,#0x1b
 	mov	(_writeRegister16_PARM_2 + 1),#0x00
 	mov	dptr,#0x00b1
 	lcall	_writeRegister16
-;	ecen4330lab7.c:518: writeRegister8(ILI9341_ENTRYMODE, 0x07);
+;	ecen4330lab7.c:558: writeRegister8(ILI9341_ENTRYMODE, 0x07);
 	mov	_writeRegister8_PARM_2,#0x07
 	mov	dpl,#0xb7
 	lcall	_writeRegister8
-;	ecen4330lab7.c:519: writeRegister8(ILI9341_SLEEPOUT, 0);
+;	ecen4330lab7.c:559: writeRegister8(ILI9341_SLEEPOUT, 0);
 	mov	_writeRegister8_PARM_2,#0x00
 	mov	dpl,#0x11
 	lcall	_writeRegister8
-;	ecen4330lab7.c:520: delay(150);
+;	ecen4330lab7.c:560: delay(150);
 	mov	dptr,#0x0096
 	lcall	_delay
-;	ecen4330lab7.c:522: writeRegister8(ILI9341_DISPLAYON, 0);
+;	ecen4330lab7.c:562: writeRegister8(ILI9341_DISPLAYON, 0);
 	mov	_writeRegister8_PARM_2,#0x00
 	mov	dpl,#0x29
 	lcall	_writeRegister8
-;	ecen4330lab7.c:523: delay(500);
+;	ecen4330lab7.c:563: delay(500);
 	mov	dptr,#0x01f4
 	lcall	_delay
-;	ecen4330lab7.c:525: setAddress(0,0,_width-1,_height-1);
+;	ecen4330lab7.c:565: setAddress(0,0,_width-1,_height-1);
 	mov	a,__width
 	add	a,#0xff
 	mov	_setAddress_PARM_3,a
@@ -2146,7 +2250,7 @@ _TFT_LCD_INIT:
 	mov	_setAddress_PARM_2,a
 	mov	(_setAddress_PARM_2 + 1),a
 	mov	dptr,#0x0000
-;	ecen4330lab7.c:526: }
+;	ecen4330lab7.c:566: }
 	ljmp	_setAddress
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'drawPixel'
@@ -2155,14 +2259,14 @@ _TFT_LCD_INIT:
 ;color1                    Allocated with name '_drawPixel_PARM_3'
 ;x3                        Allocated to registers r6 r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:534: void drawPixel(u16 x3,u16 y3,u16 color1)
+;	ecen4330lab7.c:574: void drawPixel(u16 x3,u16 y3,u16 color1)
 ;	-----------------------------------------
 ;	 function drawPixel
 ;	-----------------------------------------
 _drawPixel:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:536: setAddress(x3,y3,x3+1,y3+1);
+;	ecen4330lab7.c:576: setAddress(x3,y3,x3+1,y3+1);
 	mov	a,#0x01
 	add	a,r6
 	mov	_setAddress_PARM_3,a
@@ -2180,10 +2284,10 @@ _drawPixel:
 	mov	dpl,r6
 	mov	dph,r7
 	lcall	_setAddress
-;	ecen4330lab7.c:537: CD=0; 
+;	ecen4330lab7.c:577: CD=0; 
 ;	assignBit
 	clr	_P3_5
-;	ecen4330lab7.c:538: write8(0x2C);
+;	ecen4330lab7.c:578: write8(0x2C);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2192,10 +2296,10 @@ _drawPixel:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:539: CD = 1;
+;	ecen4330lab7.c:579: CD = 1;
 ;	assignBit
 	setb	_P3_5
-;	ecen4330lab7.c:540: write8(color1>>8);
+;	ecen4330lab7.c:580: write8(color1>>8);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2204,7 +2308,7 @@ _drawPixel:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:541: write8(color1);
+;	ecen4330lab7.c:581: write8(color1);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2213,7 +2317,7 @@ _drawPixel:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:542: }
+;	ecen4330lab7.c:582: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'fillRect'
@@ -2224,14 +2328,14 @@ _drawPixel:
 ;color                     Allocated with name '_fillRect_PARM_5'
 ;x                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:550: void fillRect(u16 x,u16 y,u16 w,u16 h,u16 color){
+;	ecen4330lab7.c:590: void fillRect(u16 x,u16 y,u16 w,u16 h,u16 color){
 ;	-----------------------------------------
 ;	 function fillRect
 ;	-----------------------------------------
 _fillRect:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:551: if ((x >= TFTWIDTH) || (y >= TFTHEIGHT))
+;	ecen4330lab7.c:591: if ((x >= TFTWIDTH) || (y >= TFTHEIGHT))
 	clr	c
 	mov	a,r6
 	subb	a,#0xf0
@@ -2245,10 +2349,10 @@ _fillRect:
 	subb	a,#0x01
 	jc	00102$
 00101$:
-;	ecen4330lab7.c:553: return;
+;	ecen4330lab7.c:593: return;
 	ret
 00102$:
-;	ecen4330lab7.c:556: if ((x+w-1) >= TFTWIDTH)
+;	ecen4330lab7.c:596: if ((x+w-1) >= TFTWIDTH)
 	mov	a,_fillRect_PARM_3
 	add	a,r6
 	mov	r4,a
@@ -2265,7 +2369,7 @@ _fillRect:
 	mov	a,r5
 	subb	a,#0x00
 	jc	00105$
-;	ecen4330lab7.c:558: w = TFTWIDTH-x;
+;	ecen4330lab7.c:598: w = TFTWIDTH-x;
 	mov	a,#0xf0
 	clr	c
 	subb	a,r6
@@ -2274,7 +2378,7 @@ _fillRect:
 	subb	a,r7
 	mov	(_fillRect_PARM_3 + 1),a
 00105$:
-;	ecen4330lab7.c:561: if ((y+h-1) >= TFTHEIGHT)
+;	ecen4330lab7.c:601: if ((y+h-1) >= TFTHEIGHT)
 	mov	a,_fillRect_PARM_4
 	add	a,_fillRect_PARM_2
 	mov	r4,a
@@ -2291,7 +2395,7 @@ _fillRect:
 	mov	a,r5
 	subb	a,#0x01
 	jc	00107$
-;	ecen4330lab7.c:563: h = TFTHEIGHT-y;
+;	ecen4330lab7.c:603: h = TFTHEIGHT-y;
 	mov	a,#0x40
 	clr	c
 	subb	a,_fillRect_PARM_2
@@ -2300,7 +2404,7 @@ _fillRect:
 	subb	a,(_fillRect_PARM_2 + 1)
 	mov	(_fillRect_PARM_4 + 1),a
 00107$:
-;	ecen4330lab7.c:566: setAddress(x, y, x+w-1, y+h-1);
+;	ecen4330lab7.c:606: setAddress(x, y, x+w-1, y+h-1);
 	mov	a,_fillRect_PARM_3
 	add	a,r6
 	mov	r4,a
@@ -2330,7 +2434,7 @@ _fillRect:
 	mov	dpl,r6
 	mov	dph,r7
 	lcall	_setAddress
-;	ecen4330lab7.c:567: write8Reg(0x2C);
+;	ecen4330lab7.c:607: write8Reg(0x2C);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -2341,10 +2445,10 @@ _fillRect:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:568: CD = 1;
+;	ecen4330lab7.c:608: CD = 1;
 ;	assignBit
 	setb	_P3_5
-;	ecen4330lab7.c:569: for(y=h; y>0; y--)
+;	ecen4330lab7.c:609: for(y=h; y>0; y--)
 	mov	r7,(_fillRect_PARM_5 + 1)
 	mov	r5,_fillRect_PARM_4
 	mov	r6,(_fillRect_PARM_4 + 1)
@@ -2352,14 +2456,14 @@ _fillRect:
 	mov	a,r5
 	orl	a,r6
 	jz	00116$
-;	ecen4330lab7.c:571: for(x=w; x>0; x--)
+;	ecen4330lab7.c:611: for(x=w; x>0; x--)
 	mov	r3,_fillRect_PARM_3
 	mov	r4,(_fillRect_PARM_3 + 1)
 00111$:
 	mov	a,r3
 	orl	a,r4
 	jz	00115$
-;	ecen4330lab7.c:573: write8(color>>8); 
+;	ecen4330lab7.c:613: write8(color>>8); 
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2368,7 +2472,7 @@ _fillRect:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:574: write8(color);
+;	ecen4330lab7.c:614: write8(color);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2378,21 +2482,21 @@ _fillRect:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:571: for(x=w; x>0; x--)
+;	ecen4330lab7.c:611: for(x=w; x>0; x--)
 	dec	r3
 	cjne	r3,#0xff,00167$
 	dec	r4
 00167$:
 	sjmp	00111$
 00115$:
-;	ecen4330lab7.c:569: for(y=h; y>0; y--)
+;	ecen4330lab7.c:609: for(y=h; y>0; y--)
 	dec	r5
 	cjne	r5,#0xff,00168$
 	dec	r6
 00168$:
 	sjmp	00114$
 00116$:
-;	ecen4330lab7.c:577: }
+;	ecen4330lab7.c:617: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'fillScreen'
@@ -2404,16 +2508,16 @@ _fillRect:
 ;hi                        Allocated to registers r5 
 ;lo                        Allocated to registers r6 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:585: void fillScreen(unsigned int Color){
+;	ecen4330lab7.c:625: void fillScreen(unsigned int Color){
 ;	-----------------------------------------
 ;	 function fillScreen
 ;	-----------------------------------------
 _fillScreen:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:588: unsigned char  i, hi = Color >> 8, lo = Color;
+;	ecen4330lab7.c:628: unsigned char  i, hi = Color >> 8, lo = Color;
 	mov	ar5,r7
-;	ecen4330lab7.c:591: setAddress(0,0,TFTWIDTH-1,TFTHEIGHT-1);
+;	ecen4330lab7.c:631: setAddress(0,0,TFTWIDTH-1,TFTHEIGHT-1);
 	clr	a
 	mov	_setAddress_PARM_2,a
 	mov	(_setAddress_PARM_2 + 1),a
@@ -2428,7 +2532,7 @@ _fillScreen:
 	lcall	_setAddress
 	pop	ar5
 	pop	ar6
-;	ecen4330lab7.c:592: write8Reg(0x2C);
+;	ecen4330lab7.c:632: write8Reg(0x2C);
 ;	assignBit
 	clr	_P3_5
 ;	assignBit
@@ -2439,10 +2543,10 @@ _fillScreen:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:593: CD = 1;
+;	ecen4330lab7.c:633: CD = 1;
 ;	assignBit
 	setb	_P3_5
-;	ecen4330lab7.c:594: write8(hi); 
+;	ecen4330lab7.c:634: write8(hi); 
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2451,7 +2555,7 @@ _fillScreen:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:595: write8(lo);
+;	ecen4330lab7.c:635: write8(lo);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2460,7 +2564,7 @@ _fillScreen:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:597: while(blocks--) {
+;	ecen4330lab7.c:637: while(blocks--) {
 	mov	r4,#0xb0
 	mov	r7,#0x04
 00104$:
@@ -2473,10 +2577,10 @@ _fillScreen:
 	mov	a,r2
 	orl	a,r3
 	jz	00106$
-;	ecen4330lab7.c:599: do {
+;	ecen4330lab7.c:639: do {
 	mov	r3,#0x10
 00101$:
-;	ecen4330lab7.c:600: write8(hi); write8(lo);write8(hi); write8(lo);
+;	ecen4330lab7.c:640: write8(hi); write8(lo);write8(hi); write8(lo);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2509,7 +2613,7 @@ _fillScreen:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:601: write8(hi); write8(lo);write8(hi); write8(lo);
+;	ecen4330lab7.c:641: write8(hi); write8(lo);write8(hi); write8(lo);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2542,18 +2646,18 @@ _fillScreen:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:602: } while(--i);
+;	ecen4330lab7.c:642: } while(--i);
 	djnz	r3,00101$
 	sjmp	00104$
 00106$:
-;	ecen4330lab7.c:604: for(i = (char)len & 63; i--; ) {
+;	ecen4330lab7.c:644: for(i = (char)len & 63; i--; ) {
 	mov	r7,#0x3f
 00109$:
 	mov	ar4,r7
 	dec	r7
 	mov	a,r4
 	jz	00111$
-;	ecen4330lab7.c:605: write8(hi); 
+;	ecen4330lab7.c:645: write8(hi); 
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2562,7 +2666,7 @@ _fillScreen:
 	movx	@dptr,a
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:606: write8(lo);
+;	ecen4330lab7.c:646: write8(lo);
 ;	assignBit
 	setb	_P3_4
 	mov	dpl,_lcd_address
@@ -2573,7 +2677,7 @@ _fillScreen:
 	clr	_P3_4
 	sjmp	00109$
 00111$:
-;	ecen4330lab7.c:608: }
+;	ecen4330lab7.c:648: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'drawChar'
@@ -2583,28 +2687,28 @@ _fillScreen:
 ;color                     Allocated with name '_drawChar_PARM_4'
 ;bg                        Allocated with name '_drawChar_PARM_5'
 ;size                      Allocated with name '_drawChar_PARM_6'
-;x                         Allocated with name '_drawChar_x_65536_312'
+;x                         Allocated with name '_drawChar_x_65536_319'
 ;i                         Allocated to registers r3 
-;line                      Allocated with name '_drawChar_line_196608_316'
+;line                      Allocated with name '_drawChar_line_196608_323'
 ;j                         Allocated to registers r2 
 ;sloc1                     Allocated with name '_drawChar_sloc1_1_0'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:616: void drawChar(int x, int y, unsigned char c,u16 color, u16 bg, u8 size){
+;	ecen4330lab7.c:656: void drawChar(int x, int y, unsigned char c,u16 color, u16 bg, u8 size){
 ;	-----------------------------------------
 ;	 function drawChar
 ;	-----------------------------------------
 _drawChar:
-	mov	_drawChar_x_65536_312,dpl
-	mov	(_drawChar_x_65536_312 + 1),dph
-;	ecen4330lab7.c:617: if ((x >=TFTWIDTH) || // Clip right
+	mov	_drawChar_x_65536_319,dpl
+	mov	(_drawChar_x_65536_319 + 1),dph
+;	ecen4330lab7.c:657: if ((x >=TFTWIDTH) || // Clip right
 	clr	c
-	mov	a,_drawChar_x_65536_312
+	mov	a,_drawChar_x_65536_319
 	subb	a,#0xf0
-	mov	a,(_drawChar_x_65536_312 + 1)
+	mov	a,(_drawChar_x_65536_319 + 1)
 	xrl	a,#0x80
 	subb	a,#0x80
 	jnc	00101$
-;	ecen4330lab7.c:618: (y >=TFTHEIGHT)           || // Clip bottom
+;	ecen4330lab7.c:658: (y >=TFTHEIGHT)           || // Clip bottom
 	clr	c
 	mov	a,_drawChar_PARM_2
 	subb	a,#0x40
@@ -2612,7 +2716,7 @@ _drawChar:
 	xrl	a,#0x80
 	subb	a,#0x81
 	jnc	00101$
-;	ecen4330lab7.c:619: ((x + 6 * size - 1) < 0) || // Clip left
+;	ecen4330lab7.c:659: ((x + 6 * size - 1) < 0) || // Clip left
 	mov	r4,_drawChar_PARM_6
 	mov	r5,#0x00
 	mov	__mulint_PARM_2,r4
@@ -2626,10 +2730,10 @@ _drawChar:
 	pop	ar4
 	pop	ar5
 	mov	a,r2
-	add	a,_drawChar_x_65536_312
+	add	a,_drawChar_x_65536_319
 	mov	r2,a
 	mov	a,r3
-	addc	a,(_drawChar_x_65536_312 + 1)
+	addc	a,(_drawChar_x_65536_319 + 1)
 	mov	r3,a
 	dec	r2
 	cjne	r2,#0xff,00182$
@@ -2637,7 +2741,7 @@ _drawChar:
 00182$:
 	mov	a,r3
 	jb	acc.7,00101$
-;	ecen4330lab7.c:620: ((y + 8 * size - 1) < 0))   // Clip top
+;	ecen4330lab7.c:660: ((y + 8 * size - 1) < 0))   // Clip top
 	mov	a,r5
 	swap	a
 	rr	a
@@ -2665,9 +2769,9 @@ _drawChar:
 	mov	a,r5
 	jnb	acc.7,00141$
 00101$:
-;	ecen4330lab7.c:622: return;
+;	ecen4330lab7.c:662: return;
 	ret
-;	ecen4330lab7.c:625: for (char i=0; i<6; i++ )
+;	ecen4330lab7.c:665: for (char i=0; i<6; i++ )
 00141$:
 	mov	a,#0x01
 	cjne	a,_drawChar_PARM_6,00186$
@@ -2695,13 +2799,13 @@ _drawChar:
 	jc	00191$
 	ret
 00191$:
-;	ecen4330lab7.c:629: if (i == 5)
+;	ecen4330lab7.c:669: if (i == 5)
 	cjne	r3,#0x05,00107$
-;	ecen4330lab7.c:631: line = 0x0;
-	mov	_drawChar_line_196608_316,#0x00
+;	ecen4330lab7.c:671: line = 0x0;
+	mov	_drawChar_line_196608_323,#0x00
 	sjmp	00140$
 00107$:
-;	ecen4330lab7.c:635: line = pgm_read_byte(font+(c*5)+i);
+;	ecen4330lab7.c:675: line = pgm_read_byte(font+(c*5)+i);
 	mov	__mulint_PARM_2,_drawChar_PARM_3
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dptr,#0x0005
@@ -2728,15 +2832,15 @@ _drawChar:
 	mov	dph,a
 	clr	a
 	movc	a,@a+dptr
-	mov	_drawChar_line_196608_316,a
-;	ecen4330lab7.c:638: for (char j = 0; j<8; j++)
+	mov	_drawChar_line_196608_323,a
+;	ecen4330lab7.c:678: for (char j = 0; j<8; j++)
 00140$:
 	mov	b,r3
 	mov	a,_drawChar_PARM_6
 	mul	ab
-	add	a,_drawChar_x_65536_312
+	add	a,_drawChar_x_65536_319
 	mov	r0,a
-	mov	a,(_drawChar_x_65536_312 + 1)
+	mov	a,(_drawChar_x_65536_319 + 1)
 	addc	a,b
 	mov	r1,a
 	mov	_drawChar_sloc1_1_0,r0
@@ -2748,22 +2852,22 @@ _drawChar:
 	jc	00195$
 	ljmp	00127$
 00195$:
-;	ecen4330lab7.c:640: if (line & 0x1)
-	mov	a,_drawChar_line_196608_316
+;	ecen4330lab7.c:680: if (line & 0x1)
+	mov	a,_drawChar_line_196608_323
 	jb	acc.0,00196$
 	ljmp	00118$
 00196$:
-;	ecen4330lab7.c:642: if (size == 1) // default size
+;	ecen4330lab7.c:682: if (size == 1) // default size
 	mov	a,r5
 	jz	00110$
-;	ecen4330lab7.c:644: drawPixel(x+i, y+j, color);
+;	ecen4330lab7.c:684: drawPixel(x+i, y+j, color);
 	mov	ar6,r3
 	mov	r7,#0x00
 	mov	a,r6
-	add	a,_drawChar_x_65536_312
+	add	a,_drawChar_x_65536_319
 	mov	dpl,a
 	mov	a,r7
-	addc	a,(_drawChar_x_65536_312 + 1)
+	addc	a,(_drawChar_x_65536_319 + 1)
 	mov	dph,a
 	mov	ar6,r2
 	mov	r7,#0x00
@@ -2790,7 +2894,7 @@ _drawChar:
 	pop	ar5
 	ljmp	00119$
 00110$:
-;	ecen4330lab7.c:647: fillRect(x+(i*size), y+(j*size), size, size, color);
+;	ecen4330lab7.c:687: fillRect(x+(i*size), y+(j*size), size, size, color);
 	mov	b,r2
 	mov	a,_drawChar_PARM_6
 	mul	ab
@@ -2824,21 +2928,21 @@ _drawChar:
 	pop	ar5
 	ljmp	00119$
 00118$:
-;	ecen4330lab7.c:649: } else if (bg != color)
+;	ecen4330lab7.c:689: } else if (bg != color)
 	jnb	_drawChar_sloc0_1_0,00198$
 	ljmp	00119$
 00198$:
-;	ecen4330lab7.c:651: if (size == 1) // default size
+;	ecen4330lab7.c:691: if (size == 1) // default size
 	mov	a,r4
 	jz	00113$
-;	ecen4330lab7.c:653: drawPixel(x+i, y+j, bg);
+;	ecen4330lab7.c:693: drawPixel(x+i, y+j, bg);
 	mov	ar6,r3
 	mov	r7,#0x00
 	mov	a,r6
-	add	a,_drawChar_x_65536_312
+	add	a,_drawChar_x_65536_319
 	mov	dpl,a
 	mov	a,r7
-	addc	a,(_drawChar_x_65536_312 + 1)
+	addc	a,(_drawChar_x_65536_319 + 1)
 	mov	dph,a
 	mov	ar6,r2
 	mov	r7,#0x00
@@ -2865,7 +2969,7 @@ _drawChar:
 	pop	ar5
 	sjmp	00119$
 00113$:
-;	ecen4330lab7.c:657: fillRect(x+i*size, y+j*size, size, size, bg);
+;	ecen4330lab7.c:697: fillRect(x+i*size, y+j*size, size, size, bg);
 	mov	b,r2
 	mov	a,_drawChar_PARM_6
 	mul	ab
@@ -2898,33 +3002,33 @@ _drawChar:
 	pop	ar4
 	pop	ar5
 00119$:
-;	ecen4330lab7.c:661: line >>= 1;
-	mov	a,_drawChar_line_196608_316
+;	ecen4330lab7.c:701: line >>= 1;
+	mov	a,_drawChar_line_196608_323
 	clr	c
 	rrc	a
-	mov	_drawChar_line_196608_316,a
-;	ecen4330lab7.c:638: for (char j = 0; j<8; j++)
+	mov	_drawChar_line_196608_323,a
+;	ecen4330lab7.c:678: for (char j = 0; j<8; j++)
 	inc	r2
 	ljmp	00123$
 00127$:
-;	ecen4330lab7.c:625: for (char i=0; i<6; i++ )
+;	ecen4330lab7.c:665: for (char i=0; i<6; i++ )
 	inc	r3
-;	ecen4330lab7.c:665: }
+;	ecen4330lab7.c:705: }
 	ljmp	00126$
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'write'
 ;------------------------------------------------------------
 ;c                         Allocated to registers r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:673: void write(u8 c)
+;	ecen4330lab7.c:713: void write(u8 c)
 ;	-----------------------------------------
 ;	 function write
 ;	-----------------------------------------
 _write:
 	mov	r7,dpl
-;	ecen4330lab7.c:675: if (c == '\n')
+;	ecen4330lab7.c:715: if (c == '\n')
 	cjne	r7,#0x0a,00105$
-;	ecen4330lab7.c:677: cursor_y += textsize*8;
+;	ecen4330lab7.c:717: cursor_y += textsize*8;
 	mov	r5,_textsize
 	clr	a
 	swap	a
@@ -2946,17 +3050,17 @@ _write:
 	mov	a,r6
 	addc	a,(_cursor_y + 1)
 	mov	(_cursor_y + 1),a
-;	ecen4330lab7.c:678: cursor_x  = 0;
+;	ecen4330lab7.c:718: cursor_x  = 0;
 	clr	a
 	mov	_cursor_x,a
 	mov	(_cursor_x + 1),a
 	ret
 00105$:
-;	ecen4330lab7.c:680: else if (c == '\r')
+;	ecen4330lab7.c:720: else if (c == '\r')
 	cjne	r7,#0x0d,00119$
 	ret
 00119$:
-;	ecen4330lab7.c:686: drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
+;	ecen4330lab7.c:726: drawChar(cursor_x, cursor_y, c, textcolor, textbgcolor, textsize);
 	mov	_drawChar_PARM_2,_cursor_y
 	mov	(_drawChar_PARM_2 + 1),(_cursor_y + 1)
 	mov	_drawChar_PARM_3,r7
@@ -2968,7 +3072,7 @@ _write:
 	mov	dpl,_cursor_x
 	mov	dph,(_cursor_x + 1)
 	lcall	_drawChar
-;	ecen4330lab7.c:687: cursor_x += textsize*6;
+;	ecen4330lab7.c:727: cursor_x += textsize*6;
 	mov	__mulint_PARM_2,_textsize
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dptr,#0x0006
@@ -2981,7 +3085,7 @@ _write:
 	mov	a,r7
 	addc	a,(_cursor_x + 1)
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:689: }
+;	ecen4330lab7.c:729: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'LCD_string_write'
@@ -2989,7 +3093,7 @@ _write:
 ;str                       Allocated to registers r5 r6 r7 
 ;i                         Allocated to registers r3 r4 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:697: void LCD_string_write(char *str)
+;	ecen4330lab7.c:737: void LCD_string_write(char *str)
 ;	-----------------------------------------
 ;	 function LCD_string_write
 ;	-----------------------------------------
@@ -2997,7 +3101,7 @@ _LCD_string_write:
 	mov	r5,dpl
 	mov	r6,dph
 	mov	r7,b
-;	ecen4330lab7.c:700: for(i=0;str[i]!=0;i++)  /* Send each char of string till the NULL */
+;	ecen4330lab7.c:740: for(i=0;str[i]!=0;i++)  /* Send each char of string till the NULL */
 	mov	r3,#0x00
 	mov	r4,#0x00
 00103$:
@@ -3014,7 +3118,7 @@ _LCD_string_write:
 	lcall	__gptrget
 	mov	r2,a
 	jz	00105$
-;	ecen4330lab7.c:702: write(str[i]);  /* Call transmit data function */
+;	ecen4330lab7.c:742: write(str[i]);  /* Call transmit data function */
 	mov	dpl,r2
 	push	ar7
 	push	ar6
@@ -3027,145 +3131,145 @@ _LCD_string_write:
 	pop	ar5
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:700: for(i=0;str[i]!=0;i++)  /* Send each char of string till the NULL */
+;	ecen4330lab7.c:740: for(i=0;str[i]!=0;i++)  /* Send each char of string till the NULL */
 	inc	r3
 	cjne	r3,#0x00,00103$
 	inc	r4
 	sjmp	00103$
 00105$:
-;	ecen4330lab7.c:704: }
+;	ecen4330lab7.c:744: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'keyDetect'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:724: unsigned char keyDetect(){
+;	ecen4330lab7.c:764: unsigned char keyDetect(){
 ;	-----------------------------------------
 ;	 function keyDetect
 ;	-----------------------------------------
 _keyDetect:
-;	ecen4330lab7.c:725: __KEYPAD_PORT__=0xF0;           /*set port direction as input-output*/
+;	ecen4330lab7.c:765: __KEYPAD_PORT__=0xF0;           /*set port direction as input-output*/
 	mov	_P1,#0xf0
-;	ecen4330lab7.c:726: received_flag = 0;
+;	ecen4330lab7.c:766: received_flag = 0;
 	mov	_received_flag,#0x00
-;	ecen4330lab7.c:727: do
+;	ecen4330lab7.c:767: do
 00102$:
-;	ecen4330lab7.c:729: __KEYPAD_PORT__ = 0xF0;
+;	ecen4330lab7.c:769: __KEYPAD_PORT__ = 0xF0;
 	mov	_P1,#0xf0
-;	ecen4330lab7.c:730: colloc = __KEYPAD_PORT__;
+;	ecen4330lab7.c:770: colloc = __KEYPAD_PORT__;
 	mov	_colloc,_P1
-;	ecen4330lab7.c:731: colloc&= 0xF0;  /* mask port for column read only */
+;	ecen4330lab7.c:771: colloc&= 0xF0;  /* mask port for column read only */
 	anl	_colloc,#0xf0
-;	ecen4330lab7.c:732: }while(colloc != 0xF0 && received_flag == 0);     /* read status of column */
+;	ecen4330lab7.c:772: }while(colloc != 0xF0 && received_flag == 0);     /* read status of column */
 	mov	a,#0xf0
 	cjne	a,_colloc,00190$
 	sjmp	00106$
 00190$:
 	mov	a,_received_flag
 	jz	00102$
-;	ecen4330lab7.c:736: do
+;	ecen4330lab7.c:776: do
 00106$:
-;	ecen4330lab7.c:739: rtcPrint();
+;	ecen4330lab7.c:779: rtcPrint();
 	lcall	_rtcPrint
-;	ecen4330lab7.c:740: delay(10);  /* 20ms key debounce time */
+;	ecen4330lab7.c:780: delay(10);  /* 20ms key debounce time */
 	mov	dptr,#0x000a
 	lcall	_delay
-;	ecen4330lab7.c:741: colloc = (__KEYPAD_PORT__ & 0xF0);  /* read status of column */
+;	ecen4330lab7.c:781: colloc = (__KEYPAD_PORT__ & 0xF0);  /* read status of column */
 	mov	a,_P1
 	anl	a,#0xf0
 	mov	_colloc,a
-;	ecen4330lab7.c:742: }while(colloc == 0xF0 && received_flag == 0); /* check for any key press */
+;	ecen4330lab7.c:782: }while(colloc == 0xF0 && received_flag == 0); /* check for any key press */
 	mov	a,#0xf0
 	cjne	a,_colloc,00108$
 	mov	a,_received_flag
 	jz	00106$
 00108$:
-;	ecen4330lab7.c:744: delay(1);
+;	ecen4330lab7.c:784: delay(1);
 	mov	dptr,#0x0001
 	lcall	_delay
-;	ecen4330lab7.c:745: colloc = (__KEYPAD_PORT__ & 0xF0);
+;	ecen4330lab7.c:785: colloc = (__KEYPAD_PORT__ & 0xF0);
 	mov	a,_P1
 	anl	a,#0xf0
 	mov	_colloc,a
-;	ecen4330lab7.c:746: }while(colloc == 0xF0 && received_flag == 0);
+;	ecen4330lab7.c:786: }while(colloc == 0xF0 && received_flag == 0);
 	mov	a,#0xf0
 	cjne	a,_colloc,00112$
 	mov	a,_received_flag
 	jz	00106$
 00112$:
-;	ecen4330lab7.c:748: if(received_flag == 0){
+;	ecen4330lab7.c:788: if(received_flag == 0){
 	mov	a,_received_flag
 	jz	00198$
 	ljmp	00134$
 00198$:
-;	ecen4330lab7.c:749: while(1)
+;	ecen4330lab7.c:789: while(1)
 00122$:
-;	ecen4330lab7.c:753: __KEYPAD_PORT__= 0xFE;                                          /* check for pressed key in 1st row */
+;	ecen4330lab7.c:793: __KEYPAD_PORT__= 0xFE;                                          /* check for pressed key in 1st row */
 	mov	_P1,#0xfe
-;	ecen4330lab7.c:754: colloc = (__KEYPAD_PORT__ & 0xF0);
+;	ecen4330lab7.c:794: colloc = (__KEYPAD_PORT__ & 0xF0);
 	mov	a,_P1
 	anl	a,#0xf0
 	mov	_colloc,a
-;	ecen4330lab7.c:755: if(colloc != 0xF0)
+;	ecen4330lab7.c:795: if(colloc != 0xF0)
 	mov	a,#0xf0
 	cjne	a,_colloc,00199$
 	sjmp	00114$
 00199$:
-;	ecen4330lab7.c:757: rowloc = 0;
+;	ecen4330lab7.c:797: rowloc = 0;
 	mov	_rowloc,#0x00
-;	ecen4330lab7.c:758: break;
+;	ecen4330lab7.c:798: break;
 	sjmp	00123$
 00114$:
-;	ecen4330lab7.c:761: __KEYPAD_PORT__ = 0xFD;                                 /* check for pressed key in 2nd row */
+;	ecen4330lab7.c:801: __KEYPAD_PORT__ = 0xFD;                                 /* check for pressed key in 2nd row */
 	mov	_P1,#0xfd
-;	ecen4330lab7.c:762: colloc = (__KEYPAD_PORT__ & 0xF0);
+;	ecen4330lab7.c:802: colloc = (__KEYPAD_PORT__ & 0xF0);
 	mov	a,_P1
 	anl	a,#0xf0
 	mov	_colloc,a
-;	ecen4330lab7.c:763: if(colloc != 0xF0)
+;	ecen4330lab7.c:803: if(colloc != 0xF0)
 	mov	a,#0xf0
 	cjne	a,_colloc,00200$
 	sjmp	00116$
 00200$:
-;	ecen4330lab7.c:765: rowloc = 1;
+;	ecen4330lab7.c:805: rowloc = 1;
 	mov	_rowloc,#0x01
-;	ecen4330lab7.c:766: break;
+;	ecen4330lab7.c:806: break;
 	sjmp	00123$
 00116$:
-;	ecen4330lab7.c:769: __KEYPAD_PORT__ = 0xFB;         /* check for pressed key in 3rd row */
+;	ecen4330lab7.c:809: __KEYPAD_PORT__ = 0xFB;         /* check for pressed key in 3rd row */
 	mov	_P1,#0xfb
-;	ecen4330lab7.c:770: colloc = (__KEYPAD_PORT__ & 0xF0);
+;	ecen4330lab7.c:810: colloc = (__KEYPAD_PORT__ & 0xF0);
 	mov	a,_P1
 	anl	a,#0xf0
 	mov	_colloc,a
-;	ecen4330lab7.c:771: if(colloc != 0xF0)
+;	ecen4330lab7.c:811: if(colloc != 0xF0)
 	mov	a,#0xf0
 	cjne	a,_colloc,00201$
 	sjmp	00118$
 00201$:
-;	ecen4330lab7.c:773: rowloc = 2;
+;	ecen4330lab7.c:813: rowloc = 2;
 	mov	_rowloc,#0x02
-;	ecen4330lab7.c:774: break;
+;	ecen4330lab7.c:814: break;
 	sjmp	00123$
 00118$:
-;	ecen4330lab7.c:777: __KEYPAD_PORT__ = 0xF7;         /* check for pressed key in 4th row */
+;	ecen4330lab7.c:817: __KEYPAD_PORT__ = 0xF7;         /* check for pressed key in 4th row */
 	mov	_P1,#0xf7
-;	ecen4330lab7.c:778: colloc = (__KEYPAD_PORT__ & 0xF0);
+;	ecen4330lab7.c:818: colloc = (__KEYPAD_PORT__ & 0xF0);
 	mov	a,_P1
 	anl	a,#0xf0
 	mov	_colloc,a
-;	ecen4330lab7.c:779: if(colloc != 0xF0)
+;	ecen4330lab7.c:819: if(colloc != 0xF0)
 	mov	a,#0xf0
 	cjne	a,_colloc,00202$
 	sjmp	00122$
 00202$:
-;	ecen4330lab7.c:781: rowloc = 3;
+;	ecen4330lab7.c:821: rowloc = 3;
 	mov	_rowloc,#0x03
-;	ecen4330lab7.c:782: break;
+;	ecen4330lab7.c:822: break;
 00123$:
-;	ecen4330lab7.c:786: if(colloc == 0xE0)
+;	ecen4330lab7.c:826: if(colloc == 0xE0)
 	mov	a,#0xe0
 	cjne	a,_colloc,00131$
-;	ecen4330lab7.c:788: return(keypad[rowloc][0]);
+;	ecen4330lab7.c:828: return(keypad[rowloc][0]);
 	mov	a,_rowloc
 	mov	b,#0x04
 	mul	ab
@@ -3179,10 +3283,10 @@ _keyDetect:
 	mov	dpl,a
 	ret
 00131$:
-;	ecen4330lab7.c:790: else if(colloc == 0xD0)
+;	ecen4330lab7.c:830: else if(colloc == 0xD0)
 	mov	a,#0xd0
 	cjne	a,_colloc,00128$
-;	ecen4330lab7.c:792: return(keypad[rowloc][1]);
+;	ecen4330lab7.c:832: return(keypad[rowloc][1]);
 	mov	a,_rowloc
 	mov	b,#0x04
 	mul	ab
@@ -3199,10 +3303,10 @@ _keyDetect:
 	mov	dpl,a
 	ret
 00128$:
-;	ecen4330lab7.c:794: else if(colloc == 0xB0)
+;	ecen4330lab7.c:834: else if(colloc == 0xB0)
 	mov	a,#0xb0
 	cjne	a,_colloc,00125$
-;	ecen4330lab7.c:796: return(keypad[rowloc][2]);
+;	ecen4330lab7.c:836: return(keypad[rowloc][2]);
 	mov	a,_rowloc
 	mov	b,#0x04
 	mul	ab
@@ -3220,7 +3324,7 @@ _keyDetect:
 	mov	dpl,a
 	ret
 00125$:
-;	ecen4330lab7.c:800: return(keypad[rowloc][3]);
+;	ecen4330lab7.c:840: return(keypad[rowloc][3]);
 	mov	a,_rowloc
 	mov	b,#0x04
 	mul	ab
@@ -3239,13 +3343,13 @@ _keyDetect:
 	mov	dpl,a
 	ret
 00134$:
-;	ecen4330lab7.c:804: received_flag = 0;
+;	ecen4330lab7.c:844: received_flag = 0;
 	mov	_received_flag,#0x00
-;	ecen4330lab7.c:805: return received_byte - 0x40;
+;	ecen4330lab7.c:845: return received_byte - 0x40;
 	mov	a,_received_byte
 	add	a,#0xc0
 	mov	dpl,a
-;	ecen4330lab7.c:807: }
+;	ecen4330lab7.c:847: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'ASCIItoHEX'
@@ -3253,13 +3357,13 @@ _keyDetect:
 ;a                         Allocated to registers r7 
 ;h                         Allocated to registers r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:815: unsigned char ASCIItoHEX(unsigned char a){
+;	ecen4330lab7.c:855: unsigned char ASCIItoHEX(unsigned char a){
 ;	-----------------------------------------
 ;	 function ASCIItoHEX
 ;	-----------------------------------------
 _ASCIItoHEX:
 	mov	r7,dpl
-;	ecen4330lab7.c:818: switch (a)
+;	ecen4330lab7.c:858: switch (a)
 	cjne	r7,#0x30,00129$
 00129$:
 	jnc	00130$
@@ -3330,111 +3434,111 @@ _ASCIItoHEX:
 	.db	00114$>>8
 	.db	00115$>>8
 	.db	00116$>>8
-;	ecen4330lab7.c:820: case '0':
+;	ecen4330lab7.c:860: case '0':
 00101$:
-;	ecen4330lab7.c:821: h = 0x00;
+;	ecen4330lab7.c:861: h = 0x00;
 	mov	r7,#0x00
-;	ecen4330lab7.c:822: break;
-;	ecen4330lab7.c:823: case '1':
+;	ecen4330lab7.c:862: break;
+;	ecen4330lab7.c:863: case '1':
 	sjmp	00118$
 00102$:
-;	ecen4330lab7.c:824: h = 0x01;
+;	ecen4330lab7.c:864: h = 0x01;
 	mov	r7,#0x01
-;	ecen4330lab7.c:825: break;
-;	ecen4330lab7.c:826: case '2':
+;	ecen4330lab7.c:865: break;
+;	ecen4330lab7.c:866: case '2':
 	sjmp	00118$
 00103$:
-;	ecen4330lab7.c:827: h = 0x02;
+;	ecen4330lab7.c:867: h = 0x02;
 	mov	r7,#0x02
-;	ecen4330lab7.c:828: break;
-;	ecen4330lab7.c:829: case '3':
+;	ecen4330lab7.c:868: break;
+;	ecen4330lab7.c:869: case '3':
 	sjmp	00118$
 00104$:
-;	ecen4330lab7.c:830: h = 0x03;
+;	ecen4330lab7.c:870: h = 0x03;
 	mov	r7,#0x03
-;	ecen4330lab7.c:831: break;
-;	ecen4330lab7.c:832: case '4':
+;	ecen4330lab7.c:871: break;
+;	ecen4330lab7.c:872: case '4':
 	sjmp	00118$
 00105$:
-;	ecen4330lab7.c:833: h = 0x04;
+;	ecen4330lab7.c:873: h = 0x04;
 	mov	r7,#0x04
-;	ecen4330lab7.c:834: break;
-;	ecen4330lab7.c:835: case '5':
+;	ecen4330lab7.c:874: break;
+;	ecen4330lab7.c:875: case '5':
 	sjmp	00118$
 00106$:
-;	ecen4330lab7.c:836: h = 0x05;
+;	ecen4330lab7.c:876: h = 0x05;
 	mov	r7,#0x05
-;	ecen4330lab7.c:837: break;
-;	ecen4330lab7.c:838: case '6':
+;	ecen4330lab7.c:877: break;
+;	ecen4330lab7.c:878: case '6':
 	sjmp	00118$
 00107$:
-;	ecen4330lab7.c:839: h = 0x06;
+;	ecen4330lab7.c:879: h = 0x06;
 	mov	r7,#0x06
-;	ecen4330lab7.c:840: break;
-;	ecen4330lab7.c:841: case '7':
+;	ecen4330lab7.c:880: break;
+;	ecen4330lab7.c:881: case '7':
 	sjmp	00118$
 00108$:
-;	ecen4330lab7.c:842: h = 0x07;
+;	ecen4330lab7.c:882: h = 0x07;
 	mov	r7,#0x07
-;	ecen4330lab7.c:843: break;
-;	ecen4330lab7.c:844: case '8':
+;	ecen4330lab7.c:883: break;
+;	ecen4330lab7.c:884: case '8':
 	sjmp	00118$
 00109$:
-;	ecen4330lab7.c:845: h = 0x08;
+;	ecen4330lab7.c:885: h = 0x08;
 	mov	r7,#0x08
-;	ecen4330lab7.c:846: break;
-;	ecen4330lab7.c:847: case '9':
+;	ecen4330lab7.c:886: break;
+;	ecen4330lab7.c:887: case '9':
 	sjmp	00118$
 00110$:
-;	ecen4330lab7.c:848: h = 0x09;
+;	ecen4330lab7.c:888: h = 0x09;
 	mov	r7,#0x09
-;	ecen4330lab7.c:849: break;
-;	ecen4330lab7.c:850: case 'A':
+;	ecen4330lab7.c:889: break;
+;	ecen4330lab7.c:890: case 'A':
 	sjmp	00118$
 00111$:
-;	ecen4330lab7.c:851: h = 0x0A;
+;	ecen4330lab7.c:891: h = 0x0A;
 	mov	r7,#0x0a
-;	ecen4330lab7.c:852: break;
-;	ecen4330lab7.c:853: case 'B':
+;	ecen4330lab7.c:892: break;
+;	ecen4330lab7.c:893: case 'B':
 	sjmp	00118$
 00112$:
-;	ecen4330lab7.c:854: h = 0x0B;
+;	ecen4330lab7.c:894: h = 0x0B;
 	mov	r7,#0x0b
-;	ecen4330lab7.c:855: break;
-;	ecen4330lab7.c:856: case 'C':
+;	ecen4330lab7.c:895: break;
+;	ecen4330lab7.c:896: case 'C':
 	sjmp	00118$
 00113$:
-;	ecen4330lab7.c:857: h = 0x0C;
+;	ecen4330lab7.c:897: h = 0x0C;
 	mov	r7,#0x0c
-;	ecen4330lab7.c:858: break;
-;	ecen4330lab7.c:859: case 'D':
+;	ecen4330lab7.c:898: break;
+;	ecen4330lab7.c:899: case 'D':
 	sjmp	00118$
 00114$:
-;	ecen4330lab7.c:860: h = 0x0D;
+;	ecen4330lab7.c:900: h = 0x0D;
 	mov	r7,#0x0d
-;	ecen4330lab7.c:861: break;
-;	ecen4330lab7.c:862: case 'E':
+;	ecen4330lab7.c:901: break;
+;	ecen4330lab7.c:902: case 'E':
 	sjmp	00118$
 00115$:
-;	ecen4330lab7.c:863: h = 0x0E;
+;	ecen4330lab7.c:903: h = 0x0E;
 	mov	r7,#0x0e
-;	ecen4330lab7.c:864: break;
-;	ecen4330lab7.c:865: case 'F':
+;	ecen4330lab7.c:904: break;
+;	ecen4330lab7.c:905: case 'F':
 	sjmp	00118$
 00116$:
-;	ecen4330lab7.c:866: h = 0x0F;
+;	ecen4330lab7.c:906: h = 0x0F;
 	mov	r7,#0x0f
-;	ecen4330lab7.c:867: break;
-;	ecen4330lab7.c:868: default:
+;	ecen4330lab7.c:907: break;
+;	ecen4330lab7.c:908: default:
 	sjmp	00118$
 00117$:
-;	ecen4330lab7.c:869: h = 0x00;
+;	ecen4330lab7.c:909: h = 0x00;
 	mov	r7,#0x00
-;	ecen4330lab7.c:871: }
+;	ecen4330lab7.c:911: }
 00118$:
-;	ecen4330lab7.c:872: return h;
+;	ecen4330lab7.c:912: return h;
 	mov	dpl,r7
-;	ecen4330lab7.c:873: }
+;	ecen4330lab7.c:913: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'HEXtoASCII'
@@ -3442,14 +3546,14 @@ _ASCIItoHEX:
 ;h                         Allocated to registers r6 r7 
 ;a                         Allocated to registers r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:880: unsigned char HEXtoASCII(unsigned int h){
+;	ecen4330lab7.c:920: unsigned char HEXtoASCII(unsigned int h){
 ;	-----------------------------------------
 ;	 function HEXtoASCII
 ;	-----------------------------------------
 _HEXtoASCII:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:883: switch (h)
+;	ecen4330lab7.c:923: switch (h)
 	clr	c
 	mov	a,#0x0f
 	subb	a,r6
@@ -3502,123 +3606,123 @@ _HEXtoASCII:
 	.db	00114$>>8
 	.db	00115$>>8
 	.db	00116$>>8
-;	ecen4330lab7.c:885: case 0x0000:
+;	ecen4330lab7.c:925: case 0x0000:
 00101$:
-;	ecen4330lab7.c:886: a = '0';
+;	ecen4330lab7.c:926: a = '0';
 	mov	r7,#0x30
-;	ecen4330lab7.c:887: break;
-;	ecen4330lab7.c:888: case 0x0001:
+;	ecen4330lab7.c:927: break;
+;	ecen4330lab7.c:928: case 0x0001:
 	sjmp	00118$
 00102$:
-;	ecen4330lab7.c:889: a = '1';
+;	ecen4330lab7.c:929: a = '1';
 	mov	r7,#0x31
-;	ecen4330lab7.c:890: break;
-;	ecen4330lab7.c:891: case 0x0002:
+;	ecen4330lab7.c:930: break;
+;	ecen4330lab7.c:931: case 0x0002:
 	sjmp	00118$
 00103$:
-;	ecen4330lab7.c:892: a = '2';
+;	ecen4330lab7.c:932: a = '2';
 	mov	r7,#0x32
-;	ecen4330lab7.c:893: break;
-;	ecen4330lab7.c:894: case 0x0003:
+;	ecen4330lab7.c:933: break;
+;	ecen4330lab7.c:934: case 0x0003:
 	sjmp	00118$
 00104$:
-;	ecen4330lab7.c:895: a = '3';
+;	ecen4330lab7.c:935: a = '3';
 	mov	r7,#0x33
-;	ecen4330lab7.c:896: break;
-;	ecen4330lab7.c:897: case 0x0004:
+;	ecen4330lab7.c:936: break;
+;	ecen4330lab7.c:937: case 0x0004:
 	sjmp	00118$
 00105$:
-;	ecen4330lab7.c:898: a = '4';
+;	ecen4330lab7.c:938: a = '4';
 	mov	r7,#0x34
-;	ecen4330lab7.c:899: break;
-;	ecen4330lab7.c:900: case 0x0005:
+;	ecen4330lab7.c:939: break;
+;	ecen4330lab7.c:940: case 0x0005:
 	sjmp	00118$
 00106$:
-;	ecen4330lab7.c:901: a = '5';
+;	ecen4330lab7.c:941: a = '5';
 	mov	r7,#0x35
-;	ecen4330lab7.c:902: break;
-;	ecen4330lab7.c:903: case 0x0006:
+;	ecen4330lab7.c:942: break;
+;	ecen4330lab7.c:943: case 0x0006:
 	sjmp	00118$
 00107$:
-;	ecen4330lab7.c:904: a = '6';
+;	ecen4330lab7.c:944: a = '6';
 	mov	r7,#0x36
-;	ecen4330lab7.c:905: break;
-;	ecen4330lab7.c:906: case 0x0007:
+;	ecen4330lab7.c:945: break;
+;	ecen4330lab7.c:946: case 0x0007:
 	sjmp	00118$
 00108$:
-;	ecen4330lab7.c:907: a = '7';
+;	ecen4330lab7.c:947: a = '7';
 	mov	r7,#0x37
-;	ecen4330lab7.c:908: break;
-;	ecen4330lab7.c:909: case 0x0008:
+;	ecen4330lab7.c:948: break;
+;	ecen4330lab7.c:949: case 0x0008:
 	sjmp	00118$
 00109$:
-;	ecen4330lab7.c:910: a = '8';
+;	ecen4330lab7.c:950: a = '8';
 	mov	r7,#0x38
-;	ecen4330lab7.c:911: break;
-;	ecen4330lab7.c:912: case 0x0009:
+;	ecen4330lab7.c:951: break;
+;	ecen4330lab7.c:952: case 0x0009:
 	sjmp	00118$
 00110$:
-;	ecen4330lab7.c:913: a = '9';
+;	ecen4330lab7.c:953: a = '9';
 	mov	r7,#0x39
-;	ecen4330lab7.c:914: break;
-;	ecen4330lab7.c:915: case 0x000A:
+;	ecen4330lab7.c:954: break;
+;	ecen4330lab7.c:955: case 0x000A:
 	sjmp	00118$
 00111$:
-;	ecen4330lab7.c:916: a = 'A';
+;	ecen4330lab7.c:956: a = 'A';
 	mov	r7,#0x41
-;	ecen4330lab7.c:917: break;
-;	ecen4330lab7.c:918: case 0x000B:
+;	ecen4330lab7.c:957: break;
+;	ecen4330lab7.c:958: case 0x000B:
 	sjmp	00118$
 00112$:
-;	ecen4330lab7.c:919: a = 'B';
+;	ecen4330lab7.c:959: a = 'B';
 	mov	r7,#0x42
-;	ecen4330lab7.c:920: break;
-;	ecen4330lab7.c:921: case 0x000C:
+;	ecen4330lab7.c:960: break;
+;	ecen4330lab7.c:961: case 0x000C:
 	sjmp	00118$
 00113$:
-;	ecen4330lab7.c:922: a = 'C';
+;	ecen4330lab7.c:962: a = 'C';
 	mov	r7,#0x43
-;	ecen4330lab7.c:923: break;
-;	ecen4330lab7.c:924: case 0x000D:
+;	ecen4330lab7.c:963: break;
+;	ecen4330lab7.c:964: case 0x000D:
 	sjmp	00118$
 00114$:
-;	ecen4330lab7.c:925: a = 'D';
+;	ecen4330lab7.c:965: a = 'D';
 	mov	r7,#0x44
-;	ecen4330lab7.c:926: break;
-;	ecen4330lab7.c:927: case 0x000E:
+;	ecen4330lab7.c:966: break;
+;	ecen4330lab7.c:967: case 0x000E:
 	sjmp	00118$
 00115$:
-;	ecen4330lab7.c:928: a = 'E';
+;	ecen4330lab7.c:968: a = 'E';
 	mov	r7,#0x45
-;	ecen4330lab7.c:929: break;
-;	ecen4330lab7.c:930: case 0x000F:
+;	ecen4330lab7.c:969: break;
+;	ecen4330lab7.c:970: case 0x000F:
 	sjmp	00118$
 00116$:
-;	ecen4330lab7.c:931: a = 'F';
+;	ecen4330lab7.c:971: a = 'F';
 	mov	r7,#0x46
-;	ecen4330lab7.c:932: break;
-;	ecen4330lab7.c:933: default:
+;	ecen4330lab7.c:972: break;
+;	ecen4330lab7.c:973: default:
 	sjmp	00118$
 00117$:
-;	ecen4330lab7.c:934: a = '0';
+;	ecen4330lab7.c:974: a = '0';
 	mov	r7,#0x30
-;	ecen4330lab7.c:936: }
+;	ecen4330lab7.c:976: }
 00118$:
-;	ecen4330lab7.c:937: return a;
+;	ecen4330lab7.c:977: return a;
 	mov	dpl,r7
-;	ecen4330lab7.c:938: }
+;	ecen4330lab7.c:978: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'HEXtoASCII_8write'
 ;------------------------------------------------------------
 ;h                         Allocated to registers r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:946: void HEXtoASCII_8write(unsigned char h){
+;	ecen4330lab7.c:986: void HEXtoASCII_8write(unsigned char h){
 ;	-----------------------------------------
 ;	 function HEXtoASCII_8write
 ;	-----------------------------------------
 _HEXtoASCII_8write:
-;	ecen4330lab7.c:949: byte = (h >> 4);
+;	ecen4330lab7.c:989: byte = (h >> 4);
 	mov	a,dpl
 	mov	r7,a
 	swap	a
@@ -3626,88 +3730,88 @@ _HEXtoASCII_8write:
 	mov	r6,a
 	mov	_byte,r6
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:950: byte &= 0x0F;
+;	ecen4330lab7.c:990: byte &= 0x0F;
 	anl	_byte,#0x0f
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:951: ASCII = HEXtoASCII(byte);
+;	ecen4330lab7.c:991: ASCII = HEXtoASCII(byte);
 	mov	dpl,_byte
 	mov	dph,(_byte + 1)
 	push	ar7
 	lcall	_HEXtoASCII
-;	ecen4330lab7.c:952: write(ASCII);
+;	ecen4330lab7.c:992: write(ASCII);
 	mov  _ASCII,dpl
 	lcall	_write
 	pop	ar7
-;	ecen4330lab7.c:955: byte = (h & 0x0F);
+;	ecen4330lab7.c:995: byte = (h & 0x0F);
 	mov	r6,#0x00
 	mov	a,#0x0f
 	anl	a,r7
 	mov	_byte,a
 ;	1-genFromRTrack replaced	mov	(_byte + 1),#0x00
 	mov	(_byte + 1),r6
-;	ecen4330lab7.c:956: ASCII = HEXtoASCII(byte);
+;	ecen4330lab7.c:996: ASCII = HEXtoASCII(byte);
 	mov	dpl,_byte
 	mov	dph,(_byte + 1)
 	lcall	_HEXtoASCII
-;	ecen4330lab7.c:957: write(ASCII);
+;	ecen4330lab7.c:997: write(ASCII);
 	mov  _ASCII,dpl
-;	ecen4330lab7.c:958: }
+;	ecen4330lab7.c:998: }
 	ljmp	_write
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'HEXtoASCII_16write'
 ;------------------------------------------------------------
 ;h                         Allocated to registers r6 r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:966: void HEXtoASCII_16write(unsigned int h){
+;	ecen4330lab7.c:1006: void HEXtoASCII_16write(unsigned int h){
 ;	-----------------------------------------
 ;	 function HEXtoASCII_16write
 ;	-----------------------------------------
 _HEXtoASCII_16write:
 	mov	r6,dpl
-;	ecen4330lab7.c:969: byte = (h >> 12);
+;	ecen4330lab7.c:1009: byte = (h >> 12);
 	mov	a,dph
 	mov	r7,a
 	swap	a
 	anl	a,#0x0f
 	mov	_byte,a
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:970: byte &= 0x000F;
+;	ecen4330lab7.c:1010: byte &= 0x000F;
 	anl	_byte,#0x0f
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:971: ASCII = HEXtoASCII(byte);
+;	ecen4330lab7.c:1011: ASCII = HEXtoASCII(byte);
 	mov	dpl,_byte
 	mov	dph,(_byte + 1)
 	push	ar7
 	push	ar6
 	lcall	_HEXtoASCII
 	mov	_ASCII,dpl
-;	ecen4330lab7.c:972: LCD_string_write("0x");
-	mov	dptr,#___str_2
+;	ecen4330lab7.c:1012: LCD_string_write("0x");
+	mov	dptr,#___str_4
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:973: write(ASCII);
+;	ecen4330lab7.c:1013: write(ASCII);
 	mov	dpl,_ASCII
 	lcall	_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:976: byte = (h >> 8);
+;	ecen4330lab7.c:1016: byte = (h >> 8);
 	mov	_byte,r7
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:977: byte &= 0x000F;
+;	ecen4330lab7.c:1017: byte &= 0x000F;
 	anl	_byte,#0x0f
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:978: ASCII = HEXtoASCII(byte);
+;	ecen4330lab7.c:1018: ASCII = HEXtoASCII(byte);
 	mov	dpl,_byte
 	mov	dph,(_byte + 1)
 	push	ar7
 	push	ar6
 	lcall	_HEXtoASCII
-;	ecen4330lab7.c:979: write(ASCII);
+;	ecen4330lab7.c:1019: write(ASCII);
 	mov  _ASCII,dpl
 	lcall	_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:982: byte = (h >> 4);
+;	ecen4330lab7.c:1022: byte = (h >> 4);
 	mov	_byte,r6
 	mov	a,r7
 	swap	a
@@ -3721,33 +3825,33 @@ _HEXtoASCII_16write:
 	xrl	a,_byte
 	xch	a,_byte
 	mov	(_byte + 1),a
-;	ecen4330lab7.c:983: byte &= 0x000F;
+;	ecen4330lab7.c:1023: byte &= 0x000F;
 	anl	_byte,#0x0f
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:984: ASCII = HEXtoASCII(byte);
+;	ecen4330lab7.c:1024: ASCII = HEXtoASCII(byte);
 	mov	dpl,_byte
 	mov	dph,(_byte + 1)
 	push	ar7
 	push	ar6
 	lcall	_HEXtoASCII
-;	ecen4330lab7.c:985: write(ASCII);
+;	ecen4330lab7.c:1025: write(ASCII);
 	mov  _ASCII,dpl
 	lcall	_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:988: byte = h;
+;	ecen4330lab7.c:1028: byte = h;
 	mov	_byte,r6
 	mov	(_byte + 1),r7
-;	ecen4330lab7.c:989: byte &= 0x000F;
+;	ecen4330lab7.c:1029: byte &= 0x000F;
 	anl	_byte,#0x0f
 	mov	(_byte + 1),#0x00
-;	ecen4330lab7.c:990: ASCII = HEXtoASCII(byte);
+;	ecen4330lab7.c:1030: ASCII = HEXtoASCII(byte);
 	mov	dpl,_byte
 	mov	dph,(_byte + 1)
 	lcall	_HEXtoASCII
-;	ecen4330lab7.c:991: write(ASCII);
+;	ecen4330lab7.c:1031: write(ASCII);
 	mov  _ASCII,dpl
-;	ecen4330lab7.c:992: }
+;	ecen4330lab7.c:1032: }
 	ljmp	_write
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'RAMwrite'
@@ -3756,26 +3860,26 @@ _HEXtoASCII_16write:
 ;a                         Allocated to registers r6 r7 
 ;ram_address               Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1000: void RAMwrite(unsigned int a, unsigned char d){
+;	ecen4330lab7.c:1040: void RAMwrite(unsigned int a, unsigned char d){
 ;	-----------------------------------------
 ;	 function RAMwrite
 ;	-----------------------------------------
 _RAMwrite:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:1003: IOM = 0;
+;	ecen4330lab7.c:1043: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:1006: ram_address = (unsigned char __xdata*)(a);
+;	ecen4330lab7.c:1046: ram_address = (unsigned char __xdata*)(a);
 	mov	dpl,r6
 	mov	dph,r7
-;	ecen4330lab7.c:1009: *ram_address = d;
+;	ecen4330lab7.c:1049: *ram_address = d;
 	mov	a,_RAMwrite_PARM_2
 	movx	@dptr,a
-;	ecen4330lab7.c:1010: IOM = 1;
+;	ecen4330lab7.c:1050: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:1011: }
+;	ecen4330lab7.c:1051: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'testRAM'
@@ -3784,29 +3888,29 @@ _RAMwrite:
 ;i                         Allocated to registers r5 r6 
 ;ram_address               Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1014: void testRAM(unsigned char d){
+;	ecen4330lab7.c:1054: void testRAM(unsigned char d){
 ;	-----------------------------------------
 ;	 function testRAM
 ;	-----------------------------------------
 _testRAM:
 	mov	r7,dpl
-;	ecen4330lab7.c:1018: for (i = __START_RAM__; i<=__END_RAM__; i++) {
+;	ecen4330lab7.c:1058: for (i = __START_RAM__; i<=__END_RAM__; i++) {
 	mov	r5,#0x00
 	mov	r6,#0x00
 00102$:
-;	ecen4330lab7.c:1019: IOM = 0;
+;	ecen4330lab7.c:1059: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:1020: ram_address = (unsigned char __xdata*)(i);
+;	ecen4330lab7.c:1060: ram_address = (unsigned char __xdata*)(i);
 	mov	dpl,r5
 	mov	dph,r6
-;	ecen4330lab7.c:1021: *ram_address = d;
+;	ecen4330lab7.c:1061: *ram_address = d;
 	mov	a,r7
 	movx	@dptr,a
-;	ecen4330lab7.c:1022: IOM = 1;
+;	ecen4330lab7.c:1062: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:1018: for (i = __START_RAM__; i<=__END_RAM__; i++) {
+;	ecen4330lab7.c:1058: for (i = __START_RAM__; i<=__END_RAM__; i++) {
 	inc	r5
 	cjne	r5,#0x00,00111$
 	inc	r6
@@ -3817,7 +3921,7 @@ _testRAM:
 	mov	a,#0xff
 	subb	a,r6
 	jnc	00102$
-;	ecen4330lab7.c:1025: }
+;	ecen4330lab7.c:1065: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'RAMread'
@@ -3825,119 +3929,119 @@ _testRAM:
 ;a                         Allocated to registers r6 r7 
 ;ram_address               Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1032: unsigned char RAMread(unsigned int a){
+;	ecen4330lab7.c:1072: unsigned char RAMread(unsigned int a){
 ;	-----------------------------------------
 ;	 function RAMread
 ;	-----------------------------------------
 _RAMread:
 	mov	r6,dpl
 	mov	r7,dph
-;	ecen4330lab7.c:1035: IOM = 0;
+;	ecen4330lab7.c:1075: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:1038: ram_address = (unsigned char __xdata*)(a);
+;	ecen4330lab7.c:1078: ram_address = (unsigned char __xdata*)(a);
 	mov	dpl,r6
 	mov	dph,r7
-;	ecen4330lab7.c:1041: data = *ram_address;
+;	ecen4330lab7.c:1081: data = *ram_address;
 	movx	a,@dptr
 	mov	_data,a
-;	ecen4330lab7.c:1042: IOM = 1;
+;	ecen4330lab7.c:1082: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:1043: return data;
+;	ecen4330lab7.c:1083: return data;
 	mov	dpl,_data
-;	ecen4330lab7.c:1044: }
+;	ecen4330lab7.c:1084: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'resetLCD'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1056: void resetLCD(){
+;	ecen4330lab7.c:1096: void resetLCD(){
 ;	-----------------------------------------
 ;	 function resetLCD
 ;	-----------------------------------------
 _resetLCD:
-;	ecen4330lab7.c:1057: setRotation(4);
+;	ecen4330lab7.c:1097: setRotation(4);
 	mov	dpl,#0x04
 	lcall	_setRotation
-;	ecen4330lab7.c:1058: setTextColor(GRAY, BLACK);
+;	ecen4330lab7.c:1098: setTextColor(GRAY, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xd6ba
 	lcall	_setTextColor
-;	ecen4330lab7.c:1059: setTextSize(3);
+;	ecen4330lab7.c:1099: setTextSize(3);
 	mov	dpl,#0x03
 	lcall	_setTextSize
-;	ecen4330lab7.c:1060: fillScreen(BLACK);
+;	ecen4330lab7.c:1100: fillScreen(BLACK);
 	mov	dptr,#0x0000
 	lcall	_fillScreen
-;	ecen4330lab7.c:1061: setCursor(0, 0);
+;	ecen4330lab7.c:1101: setCursor(0, 0);
 	clr	a
 	mov	_setCursor_PARM_2,a
 	mov	(_setCursor_PARM_2 + 1),a
 	mov	dptr,#0x0000
-;	ecen4330lab7.c:1062: }
+;	ecen4330lab7.c:1102: }
 	ljmp	_setCursor
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'invalidInput'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1074: void invalidInput(){
+;	ecen4330lab7.c:1114: void invalidInput(){
 ;	-----------------------------------------
 ;	 function invalidInput
 ;	-----------------------------------------
 _invalidInput:
-;	ecen4330lab7.c:1075: resetLCD();
+;	ecen4330lab7.c:1115: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1076: setTextColor(RED, BLACK);
+;	ecen4330lab7.c:1116: setTextColor(RED, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xf800
 	lcall	_setTextColor
-;	ecen4330lab7.c:1079: LCD_string_write("\n   Invalid\n\n");
-	mov	dptr,#___str_3
+;	ecen4330lab7.c:1119: LCD_string_write("\n   Invalid\n\n");
+	mov	dptr,#___str_5
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1080: LCD_string_write("    Input");
-	mov	dptr,#___str_4
+;	ecen4330lab7.c:1120: LCD_string_write("    Input");
+	mov	dptr,#___str_6
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1083: delay(200);
+;	ecen4330lab7.c:1123: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:1084: resetLCD();
-;	ecen4330lab7.c:1085: }
+;	ecen4330lab7.c:1124: resetLCD();
+;	ecen4330lab7.c:1125: }
 	ljmp	_resetLCD
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'inputRead16'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1096: void inputRead16(){
+;	ecen4330lab7.c:1136: void inputRead16(){
 ;	-----------------------------------------
 ;	 function inputRead16
 ;	-----------------------------------------
 _inputRead16:
-;	ecen4330lab7.c:1097: input16 = 0x0000;
+;	ecen4330lab7.c:1137: input16 = 0x0000;
 	clr	a
 	mov	_input16,a
 	mov	(_input16 + 1),a
-;	ecen4330lab7.c:1099: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1139: setTextColor(WHITE, BLACK);
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1102: key = keyDetect();
+;	ecen4330lab7.c:1142: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1103: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1143: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1104: write(key);
+;	ecen4330lab7.c:1144: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1105: input16 |= (ASCIItoHEX(key) << 12);
+;	ecen4330lab7.c:1145: input16 |= (ASCIItoHEX(key) << 12);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -3949,19 +4053,19 @@ _inputRead16:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1107: key = keyDetect();
+;	ecen4330lab7.c:1147: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1108: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1148: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1109: write(key);
+;	ecen4330lab7.c:1149: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1110: input16 |= (ASCIItoHEX(key) << 8);
+;	ecen4330lab7.c:1150: input16 |= (ASCIItoHEX(key) << 8);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -3970,19 +4074,19 @@ _inputRead16:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1112: key = keyDetect();
+;	ecen4330lab7.c:1152: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1113: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1153: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1114: write(key);
+;	ecen4330lab7.c:1154: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1115: input16 |= (ASCIItoHEX(key) << 4);
+;	ecen4330lab7.c:1155: input16 |= (ASCIItoHEX(key) << 4);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -4002,19 +4106,19 @@ _inputRead16:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1117: key = keyDetect();
+;	ecen4330lab7.c:1157: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1118: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1158: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1119: write(key);
+;	ecen4330lab7.c:1159: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1120: input16 |= ASCIItoHEX(key);
+;	ecen4330lab7.c:1160: input16 |= ASCIItoHEX(key);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -4023,101 +4127,101 @@ _inputRead16:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1121: }
+;	ecen4330lab7.c:1161: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'inputRead8'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1131: void inputRead8(){
+;	ecen4330lab7.c:1171: void inputRead8(){
 ;	-----------------------------------------
 ;	 function inputRead8
 ;	-----------------------------------------
 _inputRead8:
-;	ecen4330lab7.c:1132: setTextColor(WHITE, BLACK);
-	clr	a
-	mov	_setTextColor_PARM_2,a
-	mov	(_setTextColor_PARM_2 + 1),a
-	mov	dptr,#0xffff
-	lcall	_setTextColor
-;	ecen4330lab7.c:1134: input8 = 0x00;
-	mov	_input8,#0x00
-;	ecen4330lab7.c:1136: key = keyDetect();
-	lcall	_keyDetect
-	mov	_key,dpl
-;	ecen4330lab7.c:1137: setTextColor(WHITE, BLACK);
-	clr	a
-	mov	_setTextColor_PARM_2,a
-	mov	(_setTextColor_PARM_2 + 1),a
-	mov	dptr,#0xffff
-	lcall	_setTextColor
-;	ecen4330lab7.c:1138: write(key);
-	mov	dpl,_key
-	lcall	_write
-;	ecen4330lab7.c:1139: input8 |= (ASCIItoHEX(key) << 4);
-	mov	dpl,_key
-	lcall	_ASCIItoHEX
-	mov	a,dpl
-	swap	a
-	anl	a,#0xf0
-	orl	_input8,a
-;	ecen4330lab7.c:1141: key = keyDetect();
-	lcall	_keyDetect
-	mov	_key,dpl
-;	ecen4330lab7.c:1142: setTextColor(WHITE, BLACK);
-	clr	a
-	mov	_setTextColor_PARM_2,a
-	mov	(_setTextColor_PARM_2 + 1),a
-	mov	dptr,#0xffff
-	lcall	_setTextColor
-;	ecen4330lab7.c:1143: write(key);
-	mov	dpl,_key
-	lcall	_write
-;	ecen4330lab7.c:1144: input8 |= ASCIItoHEX(key);
-	mov	dpl,_key
-	lcall	_ASCIItoHEX
-	mov	a,dpl
-	orl	_input8,a
-;	ecen4330lab7.c:1145: }
-	ret
-;------------------------------------------------------------
-;Allocation info for local variables in function 'inputDataType'
-;------------------------------------------------------------
-;	ecen4330lab7.c:1164: void inputDataType(){
-;	-----------------------------------------
-;	 function inputDataType
-;	-----------------------------------------
-_inputDataType:
-;	ecen4330lab7.c:1165: validInput = 0;
-	mov	_validInput,#0x00
-;	ecen4330lab7.c:1166: dataType = 0;
-	mov	_dataType,#0x00
-;	ecen4330lab7.c:1168: do
-00106$:
-;	ecen4330lab7.c:1171: resetLCD();
-	lcall	_resetLCD
 ;	ecen4330lab7.c:1172: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1173: LCD_string_write("\nSelect Data\nType:\n\n");
-	mov	dptr,#___str_5
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:1174: LCD_string_write("(1) Byte\n");
-	mov	dptr,#___str_6
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:1175: LCD_string_write("(2) Word\n");
+;	ecen4330lab7.c:1174: input8 = 0x00;
+	mov	_input8,#0x00
+;	ecen4330lab7.c:1176: key = keyDetect();
+	lcall	_keyDetect
+	mov	_key,dpl
+;	ecen4330lab7.c:1177: setTextColor(WHITE, BLACK);
+	clr	a
+	mov	_setTextColor_PARM_2,a
+	mov	(_setTextColor_PARM_2 + 1),a
+	mov	dptr,#0xffff
+	lcall	_setTextColor
+;	ecen4330lab7.c:1178: write(key);
+	mov	dpl,_key
+	lcall	_write
+;	ecen4330lab7.c:1179: input8 |= (ASCIItoHEX(key) << 4);
+	mov	dpl,_key
+	lcall	_ASCIItoHEX
+	mov	a,dpl
+	swap	a
+	anl	a,#0xf0
+	orl	_input8,a
+;	ecen4330lab7.c:1181: key = keyDetect();
+	lcall	_keyDetect
+	mov	_key,dpl
+;	ecen4330lab7.c:1182: setTextColor(WHITE, BLACK);
+	clr	a
+	mov	_setTextColor_PARM_2,a
+	mov	(_setTextColor_PARM_2 + 1),a
+	mov	dptr,#0xffff
+	lcall	_setTextColor
+;	ecen4330lab7.c:1183: write(key);
+	mov	dpl,_key
+	lcall	_write
+;	ecen4330lab7.c:1184: input8 |= ASCIItoHEX(key);
+	mov	dpl,_key
+	lcall	_ASCIItoHEX
+	mov	a,dpl
+	orl	_input8,a
+;	ecen4330lab7.c:1185: }
+	ret
+;------------------------------------------------------------
+;Allocation info for local variables in function 'inputDataType'
+;------------------------------------------------------------
+;	ecen4330lab7.c:1204: void inputDataType(){
+;	-----------------------------------------
+;	 function inputDataType
+;	-----------------------------------------
+_inputDataType:
+;	ecen4330lab7.c:1205: validInput = 0;
+	mov	_validInput,#0x00
+;	ecen4330lab7.c:1206: dataType = 0;
+	mov	_dataType,#0x00
+;	ecen4330lab7.c:1208: do
+00106$:
+;	ecen4330lab7.c:1211: resetLCD();
+	lcall	_resetLCD
+;	ecen4330lab7.c:1212: setTextColor(WHITE, BLACK);
+	clr	a
+	mov	_setTextColor_PARM_2,a
+	mov	(_setTextColor_PARM_2 + 1),a
+	mov	dptr,#0xffff
+	lcall	_setTextColor
+;	ecen4330lab7.c:1213: LCD_string_write("\nSelect Data\nType:\n\n");
 	mov	dptr,#___str_7
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1176: LCD_string_write("(3) Double\n    Word\n\n  _");
+;	ecen4330lab7.c:1214: LCD_string_write("(1) Byte\n");
 	mov	dptr,#___str_8
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1177: cursor_x -= textsize * 6;
+;	ecen4330lab7.c:1215: LCD_string_write("(2) Word\n");
+	mov	dptr,#___str_9
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1216: LCD_string_write("(3) Double\n    Word\n\n  _");
+	mov	dptr,#___str_10
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1217: cursor_x -= textsize * 6;
 	mov	__mulint_PARM_2,_textsize
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dptr,#0x0006
@@ -4131,33 +4235,33 @@ _inputDataType:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1178: x = cursor_x;
+;	ecen4330lab7.c:1218: x = cursor_x;
 	mov	_x,_cursor_x
-;	ecen4330lab7.c:1179: y = cursor_y;
+;	ecen4330lab7.c:1219: y = cursor_y;
 	mov	_y,_cursor_y
-;	ecen4330lab7.c:1180: ts = textsize;
+;	ecen4330lab7.c:1220: ts = textsize;
 	mov	_ts,_textsize
-;	ecen4330lab7.c:1183: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1223: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1184: key = keyDetect();
+;	ecen4330lab7.c:1224: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1185: cursor_x = x;
+;	ecen4330lab7.c:1225: cursor_x = x;
 	mov	_cursor_x,_x
 	mov	(_cursor_x + 1),#0x00
-;	ecen4330lab7.c:1186: cursor_y = y;
+;	ecen4330lab7.c:1226: cursor_y = y;
 	mov	_cursor_y,_y
 	mov	(_cursor_y + 1),#0x00
-;	ecen4330lab7.c:1187: textsize = ts;
+;	ecen4330lab7.c:1227: textsize = ts;
 	mov	_textsize,_ts
-;	ecen4330lab7.c:1188: write(key);
+;	ecen4330lab7.c:1228: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1190: switch (key)
+;	ecen4330lab7.c:1230: switch (key)
 	mov	a,#0x31
 	cjne	a,_key,00127$
 	sjmp	00101$
@@ -4167,70 +4271,70 @@ _inputDataType:
 	sjmp	00102$
 00128$:
 	mov	a,#0x33
-;	ecen4330lab7.c:1193: case '1':
+;	ecen4330lab7.c:1233: case '1':
 	cjne	a,_key,00104$
 	sjmp	00103$
 00101$:
-;	ecen4330lab7.c:1194: dataType = 1;
+;	ecen4330lab7.c:1234: dataType = 1;
 	mov	_dataType,#0x01
-;	ecen4330lab7.c:1195: validInput = 1;
+;	ecen4330lab7.c:1235: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:1196: break;
-;	ecen4330lab7.c:1199: case '2':
+;	ecen4330lab7.c:1236: break;
+;	ecen4330lab7.c:1239: case '2':
 	sjmp	00107$
 00102$:
-;	ecen4330lab7.c:1200: dataType = 2;
+;	ecen4330lab7.c:1240: dataType = 2;
 	mov	_dataType,#0x02
-;	ecen4330lab7.c:1201: validInput = 1;
+;	ecen4330lab7.c:1241: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:1202: break;
-;	ecen4330lab7.c:1205: case '3':
+;	ecen4330lab7.c:1242: break;
+;	ecen4330lab7.c:1245: case '3':
 	sjmp	00107$
 00103$:
-;	ecen4330lab7.c:1206: dataType = 4;
+;	ecen4330lab7.c:1246: dataType = 4;
 	mov	_dataType,#0x04
-;	ecen4330lab7.c:1207: validInput = 1;
+;	ecen4330lab7.c:1247: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:1208: break;
-;	ecen4330lab7.c:1211: default:
+;	ecen4330lab7.c:1248: break;
+;	ecen4330lab7.c:1251: default:
 	sjmp	00107$
 00104$:
-;	ecen4330lab7.c:1212: invalidInput();
+;	ecen4330lab7.c:1252: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:1213: validInput = 0;
+;	ecen4330lab7.c:1253: validInput = 0;
 	mov	_validInput,#0x00
-;	ecen4330lab7.c:1215: }
+;	ecen4330lab7.c:1255: }
 00107$:
-;	ecen4330lab7.c:1216: } while (validInput == 0);
+;	ecen4330lab7.c:1256: } while (validInput == 0);
 	mov	a,_validInput
 	jnz	00130$
 	ljmp	00106$
 00130$:
-;	ecen4330lab7.c:1217: }
+;	ecen4330lab7.c:1257: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'inputDataSize'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1227: void inputDataSize(){
+;	ecen4330lab7.c:1267: void inputDataSize(){
 ;	-----------------------------------------
 ;	 function inputDataSize
 ;	-----------------------------------------
 _inputDataSize:
-;	ecen4330lab7.c:1228: validInput = 0;
-;	ecen4330lab7.c:1229: dataSize = 0x0000;
+;	ecen4330lab7.c:1268: validInput = 0;
+;	ecen4330lab7.c:1269: dataSize = 0x0000;
 	clr	a
 	mov	_validInput,a
 	mov	_dataSize,a
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1231: do
+;	ecen4330lab7.c:1271: do
 00104$:
-;	ecen4330lab7.c:1234: resetLCD();
+;	ecen4330lab7.c:1274: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1235: LCD_string_write("\nEnter Data\nSize:\n\n  0x____");
-	mov	dptr,#___str_9
+;	ecen4330lab7.c:1275: LCD_string_write("\nEnter Data\nSize:\n\n  0x____");
+	mov	dptr,#___str_11
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1236: cursor_x -= 4 * textsize * 6;
+;	ecen4330lab7.c:1276: cursor_x -= 4 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x18
 	mul	ab
@@ -4243,42 +4347,42 @@ _inputDataSize:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1237: x = cursor_x;
+;	ecen4330lab7.c:1277: x = cursor_x;
 	mov	_x,_cursor_x
-;	ecen4330lab7.c:1238: y = cursor_y;
+;	ecen4330lab7.c:1278: y = cursor_y;
 	mov	_y,_cursor_y
-;	ecen4330lab7.c:1239: ts = textsize;
+;	ecen4330lab7.c:1279: ts = textsize;
 	mov	_ts,_textsize
-;	ecen4330lab7.c:1241: input16 = 0x0000;
+;	ecen4330lab7.c:1281: input16 = 0x0000;
 	clr	a
 	mov	_input16,a
 	mov	(_input16 + 1),a
-;	ecen4330lab7.c:1243: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1283: setTextColor(WHITE, BLACK);
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1246: key = keyDetect();
+;	ecen4330lab7.c:1286: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1247: cursor_x = x;
+;	ecen4330lab7.c:1287: cursor_x = x;
 	mov	_cursor_x,_x
 	mov	(_cursor_x + 1),#0x00
-;	ecen4330lab7.c:1248: cursor_y = y;
+;	ecen4330lab7.c:1288: cursor_y = y;
 	mov	_cursor_y,_y
 	mov	(_cursor_y + 1),#0x00
-;	ecen4330lab7.c:1249: textsize = ts;
+;	ecen4330lab7.c:1289: textsize = ts;
 	mov	_textsize,_ts
-;	ecen4330lab7.c:1250: write(key);
+;	ecen4330lab7.c:1290: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1251: x = cursor_x;
+;	ecen4330lab7.c:1291: x = cursor_x;
 	mov	_x,_cursor_x
-;	ecen4330lab7.c:1252: y = cursor_y;
+;	ecen4330lab7.c:1292: y = cursor_y;
 	mov	_y,_cursor_y
-;	ecen4330lab7.c:1253: ts = textsize;
+;	ecen4330lab7.c:1293: ts = textsize;
 	mov	_ts,_textsize
-;	ecen4330lab7.c:1254: input16 |= (ASCIItoHEX(key) << 12);
+;	ecen4330lab7.c:1294: input16 |= (ASCIItoHEX(key) << 12);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -4290,27 +4394,27 @@ _inputDataSize:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1256: key = keyDetect();
+;	ecen4330lab7.c:1296: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1257: cursor_x = x;
+;	ecen4330lab7.c:1297: cursor_x = x;
 	mov	_cursor_x,_x
 	mov	(_cursor_x + 1),#0x00
-;	ecen4330lab7.c:1258: cursor_y = y;
+;	ecen4330lab7.c:1298: cursor_y = y;
 	mov	_cursor_y,_y
 	mov	(_cursor_y + 1),#0x00
-;	ecen4330lab7.c:1259: textsize = ts;
+;	ecen4330lab7.c:1299: textsize = ts;
 	mov	_textsize,_ts
-;	ecen4330lab7.c:1260: write(key);
+;	ecen4330lab7.c:1300: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1261: x = cursor_x;
+;	ecen4330lab7.c:1301: x = cursor_x;
 	mov	_x,_cursor_x
-;	ecen4330lab7.c:1262: y = cursor_y;
+;	ecen4330lab7.c:1302: y = cursor_y;
 	mov	_y,_cursor_y
-;	ecen4330lab7.c:1263: ts = textsize;
+;	ecen4330lab7.c:1303: ts = textsize;
 	mov	_ts,_textsize
-;	ecen4330lab7.c:1264: input16 |= (ASCIItoHEX(key) << 8);
+;	ecen4330lab7.c:1304: input16 |= (ASCIItoHEX(key) << 8);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -4319,27 +4423,27 @@ _inputDataSize:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1266: key = keyDetect();
+;	ecen4330lab7.c:1306: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1267: cursor_x = x;
+;	ecen4330lab7.c:1307: cursor_x = x;
 	mov	_cursor_x,_x
 	mov	(_cursor_x + 1),#0x00
-;	ecen4330lab7.c:1268: cursor_y = y;
+;	ecen4330lab7.c:1308: cursor_y = y;
 	mov	_cursor_y,_y
 	mov	(_cursor_y + 1),#0x00
-;	ecen4330lab7.c:1269: textsize = ts;
+;	ecen4330lab7.c:1309: textsize = ts;
 	mov	_textsize,_ts
-;	ecen4330lab7.c:1270: write(key);
+;	ecen4330lab7.c:1310: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1271: x = cursor_x;
+;	ecen4330lab7.c:1311: x = cursor_x;
 	mov	_x,_cursor_x
-;	ecen4330lab7.c:1272: y = cursor_y;
+;	ecen4330lab7.c:1312: y = cursor_y;
 	mov	_y,_cursor_y
-;	ecen4330lab7.c:1273: ts = textsize;
+;	ecen4330lab7.c:1313: ts = textsize;
 	mov	_ts,_textsize
-;	ecen4330lab7.c:1274: input16 |= (ASCIItoHEX(key) << 4);
+;	ecen4330lab7.c:1314: input16 |= (ASCIItoHEX(key) << 4);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -4359,27 +4463,27 @@ _inputDataSize:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1276: key = keyDetect();
+;	ecen4330lab7.c:1316: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1277: cursor_x = x;
+;	ecen4330lab7.c:1317: cursor_x = x;
 	mov	_cursor_x,_x
 	mov	(_cursor_x + 1),#0x00
-;	ecen4330lab7.c:1278: cursor_y = y;
+;	ecen4330lab7.c:1318: cursor_y = y;
 	mov	_cursor_y,_y
 	mov	(_cursor_y + 1),#0x00
-;	ecen4330lab7.c:1279: textsize = ts;
+;	ecen4330lab7.c:1319: textsize = ts;
 	mov	_textsize,_ts
-;	ecen4330lab7.c:1280: write(key);
+;	ecen4330lab7.c:1320: write(key);
 	mov	dpl,_key
 	lcall	_write
-;	ecen4330lab7.c:1281: x = cursor_x;
+;	ecen4330lab7.c:1321: x = cursor_x;
 	mov	_x,_cursor_x
-;	ecen4330lab7.c:1282: y = cursor_y;
+;	ecen4330lab7.c:1322: y = cursor_y;
 	mov	_y,_cursor_y
-;	ecen4330lab7.c:1283: ts = textsize;
+;	ecen4330lab7.c:1323: ts = textsize;
 	mov	_ts,_textsize
-;	ecen4330lab7.c:1284: input16 |= ASCIItoHEX(key);
+;	ecen4330lab7.c:1324: input16 |= ASCIItoHEX(key);
 	mov	dpl,_key
 	lcall	_ASCIItoHEX
 	mov	r7,dpl
@@ -4388,75 +4492,75 @@ _inputDataSize:
 	orl	_input16,a
 	mov	a,r6
 	orl	(_input16 + 1),a
-;	ecen4330lab7.c:1285: dataSize = input16;
+;	ecen4330lab7.c:1325: dataSize = input16;
 	mov	_dataSize,_input16
 	mov	(_dataSize + 1),(_input16 + 1)
-;	ecen4330lab7.c:1288: if(dataSize == 0x0000){
+;	ecen4330lab7.c:1328: if(dataSize == 0x0000){
 	mov	a,_dataSize
 	orl	a,(_dataSize + 1)
 	jnz	00102$
-;	ecen4330lab7.c:1289: invalidInput();
+;	ecen4330lab7.c:1329: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:1290: validInput = 0;
+;	ecen4330lab7.c:1330: validInput = 0;
 	mov	_validInput,#0x00
 	ljmp	00104$
 00102$:
-;	ecen4330lab7.c:1293: validInput = 1;
+;	ecen4330lab7.c:1333: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:1295: } while (validInput == 0);
-;	ecen4330lab7.c:1296: }
+;	ecen4330lab7.c:1335: } while (validInput == 0);
+;	ecen4330lab7.c:1336: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'RAM_CHECK'
 ;------------------------------------------------------------
 ;i                         Allocated to registers r6 r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1307: void RAM_CHECK(){
+;	ecen4330lab7.c:1347: void RAM_CHECK(){
 ;	-----------------------------------------
 ;	 function RAM_CHECK
 ;	-----------------------------------------
 _RAM_CHECK:
-;	ecen4330lab7.c:1309: data = 0;
+;	ecen4330lab7.c:1349: data = 0;
 	mov	_data,#0x00
-;	ecen4330lab7.c:1310: dataEnd = 0;
+;	ecen4330lab7.c:1350: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:1313: resetLCD();
+;	ecen4330lab7.c:1353: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1314: LCD_string_write("\nWriting 0x55\nto all\nexternal RAM\nlocations.\n\n");
-	mov	dptr,#___str_10
+;	ecen4330lab7.c:1354: LCD_string_write("\nWriting 0x55\nto all\nexternal RAM\nlocations.\n\n");
+	mov	dptr,#___str_12
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1315: testRAM(RAMcheckVal1);
+;	ecen4330lab7.c:1355: testRAM(RAMcheckVal1);
 	mov	dpl,#0x55
 	lcall	_testRAM
-;	ecen4330lab7.c:1316: RAMwrite(0xFFFF, RAMcheckVal1);
+;	ecen4330lab7.c:1356: RAMwrite(0xFFFF, RAMcheckVal1);
 	mov	_RAMwrite_PARM_2,#0x55
 	mov	dptr,#0xffff
 	lcall	_RAMwrite
-;	ecen4330lab7.c:1318: setTextColor(GREEN, BLACK);
+;	ecen4330lab7.c:1358: setTextColor(GREEN, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0x07e0
 	lcall	_setTextColor
-;	ecen4330lab7.c:1319: LCD_string_write("Write\ncomplete.\n");
-	mov	dptr,#___str_11
+;	ecen4330lab7.c:1359: LCD_string_write("Write\ncomplete.\n");
+	mov	dptr,#___str_13
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1320: delay(200);
+;	ecen4330lab7.c:1360: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:1323: resetLCD();
+;	ecen4330lab7.c:1363: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1324: LCD_string_write("\nVerifying all\nRAM locations\nequal 0x55.\n\n");
-	mov	dptr,#___str_12
+;	ecen4330lab7.c:1364: LCD_string_write("\nVerifying all\nRAM locations\nequal 0x55.\n\n");
+	mov	dptr,#___str_14
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1326: do
+;	ecen4330lab7.c:1366: do
 	mov	r6,#0x00
 	mov	r7,#0x00
 00102$:
-;	ecen4330lab7.c:1328: data = RAMread(i);
+;	ecen4330lab7.c:1368: data = RAMread(i);
 	mov	dpl,r6
 	mov	dph,r7
 	push	ar7
@@ -4465,12 +4569,12 @@ _RAM_CHECK:
 	mov	_data,dpl
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1329: i++;
+;	ecen4330lab7.c:1369: i++;
 	inc	r6
 	cjne	r6,#0x00,00163$
 	inc	r7
 00163$:
-;	ecen4330lab7.c:1330: } while (data == RAMcheckVal1 && i <= __END_RAM__);
+;	ecen4330lab7.c:1370: } while (data == RAMcheckVal1 && i <= __END_RAM__);
 	mov	a,#0x55
 	cjne	a,_data,00164$
 	mov	a,#0x01
@@ -4487,10 +4591,10 @@ _RAM_CHECK:
 	subb	a,r7
 	jnc	00102$
 00129$:
-;	ecen4330lab7.c:1331: if(data == RAMcheckVal1){
+;	ecen4330lab7.c:1371: if(data == RAMcheckVal1){
 	mov	a,r5
 	jz	00106$
-;	ecen4330lab7.c:1332: data = RAMread(0xFFFF);
+;	ecen4330lab7.c:1372: data = RAMread(0xFFFF);
 	mov	dptr,#0xffff
 	push	ar7
 	push	ar6
@@ -4499,12 +4603,12 @@ _RAM_CHECK:
 	pop	ar6
 	pop	ar7
 00106$:
-;	ecen4330lab7.c:1336: if(data != RAMcheckVal1){
+;	ecen4330lab7.c:1376: if(data != RAMcheckVal1){
 	mov	a,#0x55
 	cjne	a,_data,00169$
 	sjmp	00117$
 00169$:
-;	ecen4330lab7.c:1337: setTextColor(RED, BLACK);
+;	ecen4330lab7.c:1377: setTextColor(RED, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
@@ -4512,20 +4616,20 @@ _RAM_CHECK:
 	push	ar7
 	push	ar6
 	lcall	_setTextColor
-;	ecen4330lab7.c:1338: LCD_string_write("1st RAM check\nunsuccessful.\n\n");
-	mov	dptr,#___str_13
+;	ecen4330lab7.c:1378: LCD_string_write("1st RAM check\nunsuccessful.\n\n");
+	mov	dptr,#___str_15
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1339: delay(100);
+;	ecen4330lab7.c:1379: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:1341: LCD_string_write("Error at:\n");
-	mov	dptr,#___str_14
+;	ecen4330lab7.c:1381: LCD_string_write("Error at:\n");
+	mov	dptr,#___str_16
 	mov	b,#0x80
 	lcall	_LCD_string_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1342: HEXtoASCII_16write(i - 1);
+;	ecen4330lab7.c:1382: HEXtoASCII_16write(i - 1);
 	mov	a,r6
 	add	a,#0xff
 	mov	dpl,a
@@ -4533,77 +4637,77 @@ _RAM_CHECK:
 	addc	a,#0xff
 	mov	dph,a
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1343: LCD_string_write(": 0x");
-	mov	dptr,#___str_15
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:1344: HEXtoASCII_8write(data);
-	mov	dpl,_data
-	lcall	_HEXtoASCII_8write
-;	ecen4330lab7.c:1346: setTextColor(WHITE, BLACK);
-	clr	a
-	mov	_setTextColor_PARM_2,a
-	mov	(_setTextColor_PARM_2 + 1),a
-	mov	dptr,#0xffff
-	lcall	_setTextColor
-;	ecen4330lab7.c:1347: LCD_string_write("Returning to\nmain menu.");
-	mov	dptr,#___str_16
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:1348: delay(200);
-	mov	dptr,#0x00c8
-	ljmp	_delay
-00117$:
-;	ecen4330lab7.c:1353: setTextColor(GREEN, BLACK);
-	clr	a
-	mov	_setTextColor_PARM_2,a
-	mov	(_setTextColor_PARM_2 + 1),a
-	mov	dptr,#0x07e0
-	lcall	_setTextColor
-;	ecen4330lab7.c:1354: LCD_string_write("1st RAM check\nsuccessful.\n\n");
+;	ecen4330lab7.c:1383: LCD_string_write(": 0x");
 	mov	dptr,#___str_17
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1355: delay(200);
-	mov	dptr,#0x00c8
-	lcall	_delay
-;	ecen4330lab7.c:1357: resetLCD();
-	lcall	_resetLCD
-;	ecen4330lab7.c:1358: LCD_string_write("\nWriting 0xAA\nto all\nexternal RAM\nlocations.\n\n");
+;	ecen4330lab7.c:1384: HEXtoASCII_8write(data);
+	mov	dpl,_data
+	lcall	_HEXtoASCII_8write
+;	ecen4330lab7.c:1386: setTextColor(WHITE, BLACK);
+	clr	a
+	mov	_setTextColor_PARM_2,a
+	mov	(_setTextColor_PARM_2 + 1),a
+	mov	dptr,#0xffff
+	lcall	_setTextColor
+;	ecen4330lab7.c:1387: LCD_string_write("Returning to\nmain menu.");
 	mov	dptr,#___str_18
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1359: testRAM(RAMcheckVal2);
-	mov	dpl,#0xaa
-	lcall	_testRAM
-;	ecen4330lab7.c:1360: RAMwrite(0xFFFF, RAMcheckVal2);
-	mov	_RAMwrite_PARM_2,#0xaa
-	mov	dptr,#0xffff
-	lcall	_RAMwrite
-;	ecen4330lab7.c:1361: setTextColor(GREEN, BLACK);
+;	ecen4330lab7.c:1388: delay(200);
+	mov	dptr,#0x00c8
+	ljmp	_delay
+00117$:
+;	ecen4330lab7.c:1393: setTextColor(GREEN, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0x07e0
 	lcall	_setTextColor
-;	ecen4330lab7.c:1362: LCD_string_write("Write\ncomplete.\n");
-	mov	dptr,#___str_11
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:1363: delay(200);
-	mov	dptr,#0x00c8
-	lcall	_delay
-;	ecen4330lab7.c:1366: resetLCD();
-	lcall	_resetLCD
-;	ecen4330lab7.c:1367: LCD_string_write("\nVerifying all\nRAM locations\nequal 0xAA.\n\n");
+;	ecen4330lab7.c:1394: LCD_string_write("1st RAM check\nsuccessful.\n\n");
 	mov	dptr,#___str_19
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1369: do
+;	ecen4330lab7.c:1395: delay(200);
+	mov	dptr,#0x00c8
+	lcall	_delay
+;	ecen4330lab7.c:1397: resetLCD();
+	lcall	_resetLCD
+;	ecen4330lab7.c:1398: LCD_string_write("\nWriting 0xAA\nto all\nexternal RAM\nlocations.\n\n");
+	mov	dptr,#___str_20
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1399: testRAM(RAMcheckVal2);
+	mov	dpl,#0xaa
+	lcall	_testRAM
+;	ecen4330lab7.c:1400: RAMwrite(0xFFFF, RAMcheckVal2);
+	mov	_RAMwrite_PARM_2,#0xaa
+	mov	dptr,#0xffff
+	lcall	_RAMwrite
+;	ecen4330lab7.c:1401: setTextColor(GREEN, BLACK);
+	clr	a
+	mov	_setTextColor_PARM_2,a
+	mov	(_setTextColor_PARM_2 + 1),a
+	mov	dptr,#0x07e0
+	lcall	_setTextColor
+;	ecen4330lab7.c:1402: LCD_string_write("Write\ncomplete.\n");
+	mov	dptr,#___str_13
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1403: delay(200);
+	mov	dptr,#0x00c8
+	lcall	_delay
+;	ecen4330lab7.c:1406: resetLCD();
+	lcall	_resetLCD
+;	ecen4330lab7.c:1407: LCD_string_write("\nVerifying all\nRAM locations\nequal 0xAA.\n\n");
+	mov	dptr,#___str_21
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1409: do
 	mov	r6,#0x00
 	mov	r7,#0x00
 00108$:
-;	ecen4330lab7.c:1371: data = RAMread(i);
+;	ecen4330lab7.c:1411: data = RAMread(i);
 	mov	dpl,r6
 	mov	dph,r7
 	push	ar7
@@ -4612,12 +4716,12 @@ _RAM_CHECK:
 	mov	_data,dpl
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1372: i++;
+;	ecen4330lab7.c:1412: i++;
 	inc	r6
 	cjne	r6,#0x00,00170$
 	inc	r7
 00170$:
-;	ecen4330lab7.c:1373: } while (data == RAMcheckVal2 && i <= __END_RAM__);
+;	ecen4330lab7.c:1413: } while (data == RAMcheckVal2 && i <= __END_RAM__);
 	mov	a,#0xaa
 	cjne	a,_data,00171$
 	mov	a,#0x01
@@ -4634,10 +4738,10 @@ _RAM_CHECK:
 	subb	a,r7
 	jnc	00108$
 00130$:
-;	ecen4330lab7.c:1374: if(data == RAMcheckVal2){
+;	ecen4330lab7.c:1414: if(data == RAMcheckVal2){
 	mov	a,r5
 	jz	00112$
-;	ecen4330lab7.c:1375: data = RAMread(0xFFFF);
+;	ecen4330lab7.c:1415: data = RAMread(0xFFFF);
 	mov	dptr,#0xffff
 	push	ar7
 	push	ar6
@@ -4646,12 +4750,12 @@ _RAM_CHECK:
 	pop	ar6
 	pop	ar7
 00112$:
-;	ecen4330lab7.c:1378: if(data != RAMcheckVal2){
+;	ecen4330lab7.c:1418: if(data != RAMcheckVal2){
 	mov	a,#0xaa
 	cjne	a,_data,00176$
 	sjmp	00114$
 00176$:
-;	ecen4330lab7.c:1379: setTextColor(RED, BLACK);
+;	ecen4330lab7.c:1419: setTextColor(RED, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
@@ -4659,20 +4763,20 @@ _RAM_CHECK:
 	push	ar7
 	push	ar6
 	lcall	_setTextColor
-;	ecen4330lab7.c:1380: LCD_string_write("2nd RAM check\nunsuccessful.\n\n");
-	mov	dptr,#___str_20
+;	ecen4330lab7.c:1420: LCD_string_write("2nd RAM check\nunsuccessful.\n\n");
+	mov	dptr,#___str_22
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1381: delay(100);
+;	ecen4330lab7.c:1421: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:1383: LCD_string_write("Error at:\n");
-	mov	dptr,#___str_14
+;	ecen4330lab7.c:1423: LCD_string_write("Error at:\n");
+	mov	dptr,#___str_16
 	mov	b,#0x80
 	lcall	_LCD_string_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1384: HEXtoASCII_16write(i - 1);
+;	ecen4330lab7.c:1424: HEXtoASCII_16write(i - 1);
 	mov	a,r6
 	add	a,#0xff
 	mov	dpl,a
@@ -4680,97 +4784,97 @@ _RAM_CHECK:
 	addc	a,#0xff
 	mov	dph,a
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1385: LCD_string_write(": 0x");
-	mov	dptr,#___str_15
+;	ecen4330lab7.c:1425: LCD_string_write(": 0x");
+	mov	dptr,#___str_17
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1386: HEXtoASCII_8write(data);
+;	ecen4330lab7.c:1426: HEXtoASCII_8write(data);
 	mov	dpl,_data
 	lcall	_HEXtoASCII_8write
-;	ecen4330lab7.c:1388: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1428: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1389: LCD_string_write("Returning to\nmain menu.");
-	mov	dptr,#___str_16
+;	ecen4330lab7.c:1429: LCD_string_write("Returning to\nmain menu.");
+	mov	dptr,#___str_18
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1390: delay(100);
+;	ecen4330lab7.c:1430: delay(100);
 	mov	dptr,#0x0064
 	ljmp	_delay
 00114$:
-;	ecen4330lab7.c:1395: setTextColor(GREEN, BLACK);
+;	ecen4330lab7.c:1435: setTextColor(GREEN, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0x07e0
 	lcall	_setTextColor
-;	ecen4330lab7.c:1396: LCD_string_write("2nd RAM check\nsuccessful.\n\n");
-	mov	dptr,#___str_21
+;	ecen4330lab7.c:1436: LCD_string_write("2nd RAM check\nsuccessful.\n\n");
+	mov	dptr,#___str_23
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1397: LCD_string_write("RAM check\ncomplete.\n\n");
-	mov	dptr,#___str_22
+;	ecen4330lab7.c:1437: LCD_string_write("RAM check\ncomplete.\n\n");
+	mov	dptr,#___str_24
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1398: delay(100);
+;	ecen4330lab7.c:1438: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:1399: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1439: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1400: LCD_string_write("Returning to\nmain menu.");
-	mov	dptr,#___str_16
+;	ecen4330lab7.c:1440: LCD_string_write("Returning to\nmain menu.");
+	mov	dptr,#___str_18
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1401: delay(100);
+;	ecen4330lab7.c:1441: delay(100);
 	mov	dptr,#0x0064
-;	ecen4330lab7.c:1404: }
+;	ecen4330lab7.c:1444: }
 	ljmp	_delay
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'MOVE'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1427: void MOVE(){
+;	ecen4330lab7.c:1467: void MOVE(){
 ;	-----------------------------------------
 ;	 function MOVE
 ;	-----------------------------------------
 _MOVE:
-;	ecen4330lab7.c:1428: endAddrCalc = 0;
+;	ecen4330lab7.c:1468: endAddrCalc = 0;
 	clr	a
 	mov	_endAddrCalc,a
 	mov	(_endAddrCalc + 1),a
 	mov	(_endAddrCalc + 2),a
 	mov	(_endAddrCalc + 3),a
-;	ecen4330lab7.c:1429: addr0 = 0;                  // Source Address
+;	ecen4330lab7.c:1469: addr0 = 0;                  // Source Address
 	mov	_addr0,a
 	mov	(_addr0 + 1),a
-;	ecen4330lab7.c:1430: addr1 = 0;                  // Source End Address
+;	ecen4330lab7.c:1470: addr1 = 0;                  // Source End Address
 	mov	_addr1,a
 	mov	(_addr1 + 1),a
-;	ecen4330lab7.c:1431: addr2 = 0;                  // Destination Address
+;	ecen4330lab7.c:1471: addr2 = 0;                  // Destination Address
 	mov	_addr2,a
 	mov	(_addr2 + 1),a
-;	ecen4330lab7.c:1432: addr3 = 0;                  // Destination End Address
+;	ecen4330lab7.c:1472: addr3 = 0;                  // Destination End Address
 	mov	_addr3,a
 	mov	(_addr3 + 1),a
-;	ecen4330lab7.c:1433: currAddr0 = 0;              // Current Source Address
+;	ecen4330lab7.c:1473: currAddr0 = 0;              // Current Source Address
 	mov	_currAddr0,a
 	mov	(_currAddr0 + 1),a
-;	ecen4330lab7.c:1434: currAddr1 = 0;              // Current Destination Address
+;	ecen4330lab7.c:1474: currAddr1 = 0;              // Current Destination Address
 	mov	_currAddr1,a
 	mov	(_currAddr1 + 1),a
-;	ecen4330lab7.c:1437: resetLCD();
+;	ecen4330lab7.c:1477: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1438: LCD_string_write("\nEnter source\nstarting RAM\naddress:\n\n\n  0x____");
-	mov	dptr,#___str_23
+;	ecen4330lab7.c:1478: LCD_string_write("\nEnter source\nstarting RAM\naddress:\n\n\n  0x____");
+	mov	dptr,#___str_25
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1439: cursor_x -= 4 * textsize * 6;
+;	ecen4330lab7.c:1479: cursor_x -= 4 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x18
 	mul	ab
@@ -4783,18 +4887,18 @@ _MOVE:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1440: inputRead16();
+;	ecen4330lab7.c:1480: inputRead16();
 	lcall	_inputRead16
-;	ecen4330lab7.c:1441: addr0 = input16;
+;	ecen4330lab7.c:1481: addr0 = input16;
 	mov	_addr0,_input16
 	mov	(_addr0 + 1),(_input16 + 1)
-;	ecen4330lab7.c:1444: resetLCD();
+;	ecen4330lab7.c:1484: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1445: LCD_string_write("\nEnter\ndestination\nstarting RAM\naddress:\n\n\n  0x____");
-	mov	dptr,#___str_24
+;	ecen4330lab7.c:1485: LCD_string_write("\nEnter\ndestination\nstarting RAM\naddress:\n\n\n  0x____");
+	mov	dptr,#___str_26
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1446: cursor_x -= 4 * textsize * 6;
+;	ecen4330lab7.c:1486: cursor_x -= 4 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x18
 	mul	ab
@@ -4807,25 +4911,25 @@ _MOVE:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1447: inputRead16();
+;	ecen4330lab7.c:1487: inputRead16();
 	lcall	_inputRead16
-;	ecen4330lab7.c:1448: addr2 = input16;
+;	ecen4330lab7.c:1488: addr2 = input16;
 	mov	_addr2,_input16
 	mov	(_addr2 + 1),(_input16 + 1)
-;	ecen4330lab7.c:1451: inputDataType();
+;	ecen4330lab7.c:1491: inputDataType();
 	lcall	_inputDataType
-;	ecen4330lab7.c:1454: resetLCD();
+;	ecen4330lab7.c:1494: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1455: inputDataSize();
+;	ecen4330lab7.c:1495: inputDataSize();
 	lcall	_inputDataSize
-;	ecen4330lab7.c:1458: if(addr2 > addr0){
+;	ecen4330lab7.c:1498: if(addr2 > addr0){
 	clr	c
 	mov	a,_addr0
 	subb	a,_addr2
 	mov	a,(_addr0 + 1)
 	subb	a,(_addr2 + 1)
 	jnc	00108$
-;	ecen4330lab7.c:1459: endAddrCalc = addr2 + (dataSize * dataType);
+;	ecen4330lab7.c:1499: endAddrCalc = addr2 + (dataSize * dataType);
 	mov	__mulint_PARM_2,_dataType
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dpl,_dataSize
@@ -4843,7 +4947,7 @@ _MOVE:
 	mov	(_endAddrCalc + 1),r5
 	mov	(_endAddrCalc + 2),#0x00
 	mov	(_endAddrCalc + 3),#0x00
-;	ecen4330lab7.c:1460: if(endAddrCalc > 0xFFFF){
+;	ecen4330lab7.c:1500: if(endAddrCalc > 0xFFFF){
 	clr	c
 	mov	a,#0xff
 	subb	a,_endAddrCalc
@@ -4854,12 +4958,12 @@ _MOVE:
 	clr	a
 	subb	a,(_endAddrCalc + 3)
 	jnc	00102$
-;	ecen4330lab7.c:1461: addr3 = 0xFFFF;
+;	ecen4330lab7.c:1501: addr3 = 0xFFFF;
 	mov	_addr3,#0xff
 	mov	(_addr3 + 1),#0xff
 	sjmp	00103$
 00102$:
-;	ecen4330lab7.c:1464: addr3 = addr2 + (dataSize * dataType);
+;	ecen4330lab7.c:1504: addr3 = addr2 + (dataSize * dataType);
 	mov	a,r6
 	add	a,_addr2
 	mov	_addr3,a
@@ -4867,7 +4971,7 @@ _MOVE:
 	addc	a,(_addr2 + 1)
 	mov	(_addr3 + 1),a
 00103$:
-;	ecen4330lab7.c:1466: dataSize = addr3 - addr2;
+;	ecen4330lab7.c:1506: dataSize = addr3 - addr2;
 	mov	a,_addr3
 	clr	c
 	subb	a,_addr2
@@ -4875,7 +4979,7 @@ _MOVE:
 	mov	a,(_addr3 + 1)
 	subb	a,(_addr2 + 1)
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1467: addr1 = addr0 + dataSize;
+;	ecen4330lab7.c:1507: addr1 = addr0 + dataSize;
 	mov	a,_dataSize
 	add	a,_addr0
 	mov	_addr1,a
@@ -4884,7 +4988,7 @@ _MOVE:
 	mov	(_addr1 + 1),a
 	sjmp	00109$
 00108$:
-;	ecen4330lab7.c:1470: endAddrCalc = addr0 + (dataSize * dataType);
+;	ecen4330lab7.c:1510: endAddrCalc = addr0 + (dataSize * dataType);
 	mov	__mulint_PARM_2,_dataType
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dpl,_dataSize
@@ -4902,7 +5006,7 @@ _MOVE:
 	mov	(_endAddrCalc + 1),r5
 	mov	(_endAddrCalc + 2),#0x00
 	mov	(_endAddrCalc + 3),#0x00
-;	ecen4330lab7.c:1471: if(endAddrCalc > 0xFFFF){
+;	ecen4330lab7.c:1511: if(endAddrCalc > 0xFFFF){
 	clr	c
 	mov	a,#0xff
 	subb	a,_endAddrCalc
@@ -4913,12 +5017,12 @@ _MOVE:
 	clr	a
 	subb	a,(_endAddrCalc + 3)
 	jnc	00105$
-;	ecen4330lab7.c:1472: addr1 = 0xFFFF;
+;	ecen4330lab7.c:1512: addr1 = 0xFFFF;
 	mov	_addr1,#0xff
 	mov	(_addr1 + 1),#0xff
 	sjmp	00106$
 00105$:
-;	ecen4330lab7.c:1475: addr1 = addr0 + (dataSize * dataType);
+;	ecen4330lab7.c:1515: addr1 = addr0 + (dataSize * dataType);
 	mov	a,r6
 	add	a,_addr0
 	mov	_addr1,a
@@ -4926,7 +5030,7 @@ _MOVE:
 	addc	a,(_addr0 + 1)
 	mov	(_addr1 + 1),a
 00106$:
-;	ecen4330lab7.c:1477: dataSize = addr1 - addr0;
+;	ecen4330lab7.c:1517: dataSize = addr1 - addr0;
 	mov	a,_addr1
 	clr	c
 	subb	a,_addr0
@@ -4934,7 +5038,7 @@ _MOVE:
 	mov	a,(_addr1 + 1)
 	subb	a,(_addr0 + 1)
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1478: addr3 = addr2 + dataSize;
+;	ecen4330lab7.c:1518: addr3 = addr2 + dataSize;
 	mov	a,_dataSize
 	add	a,_addr2
 	mov	_addr3,a
@@ -4942,7 +5046,7 @@ _MOVE:
 	addc	a,(_addr2 + 1)
 	mov	(_addr3 + 1),a
 00109$:
-;	ecen4330lab7.c:1483: if(addr0 < addr2 && addr1 > addr2){
+;	ecen4330lab7.c:1523: if(addr0 < addr2 && addr1 > addr2){
 	clr	c
 	mov	a,_addr0
 	subb	a,_addr2
@@ -4955,10 +5059,10 @@ _MOVE:
 	mov	a,(_addr2 + 1)
 	subb	a,(_addr1 + 1)
 	jnc	00113$
-;	ecen4330lab7.c:1484: currAddr0 = addr1;
+;	ecen4330lab7.c:1524: currAddr0 = addr1;
 	mov	_currAddr0,_addr1
 	mov	(_currAddr0 + 1),(_addr1 + 1)
-;	ecen4330lab7.c:1485: for(currAddr1 = addr3; currAddr1 >= addr2; currAddr1--){
+;	ecen4330lab7.c:1525: for(currAddr1 = addr3; currAddr1 >= addr2; currAddr1--){
 	mov	_currAddr1,_addr3
 	mov	(_currAddr1 + 1),(_addr3 + 1)
 00117$:
@@ -4968,23 +5072,23 @@ _MOVE:
 	mov	a,(_currAddr1 + 1)
 	subb	a,(_addr2 + 1)
 	jc	00114$
-;	ecen4330lab7.c:1486: data = RAMread(currAddr0);
+;	ecen4330lab7.c:1526: data = RAMread(currAddr0);
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_RAMread
 	mov	_data,dpl
-;	ecen4330lab7.c:1487: RAMwrite(currAddr1, data);
+;	ecen4330lab7.c:1527: RAMwrite(currAddr1, data);
 	mov	_RAMwrite_PARM_2,_data
 	mov	dpl,_currAddr1
 	mov	dph,(_currAddr1 + 1)
 	lcall	_RAMwrite
-;	ecen4330lab7.c:1488: currAddr0--;
+;	ecen4330lab7.c:1528: currAddr0--;
 	dec	_currAddr0
 	mov	a,#0xff
 	cjne	a,_currAddr0,00166$
 	dec	(_currAddr0 + 1)
 00166$:
-;	ecen4330lab7.c:1485: for(currAddr1 = addr3; currAddr1 >= addr2; currAddr1--){
+;	ecen4330lab7.c:1525: for(currAddr1 = addr3; currAddr1 >= addr2; currAddr1--){
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00167$
@@ -4992,10 +5096,10 @@ _MOVE:
 00167$:
 	sjmp	00117$
 00113$:
-;	ecen4330lab7.c:1495: currAddr0 = addr0;
+;	ecen4330lab7.c:1535: currAddr0 = addr0;
 	mov	_currAddr0,_addr0
 	mov	(_currAddr0 + 1),(_addr0 + 1)
-;	ecen4330lab7.c:1496: for(currAddr1 = addr2; currAddr1 <= addr3; currAddr1++){
+;	ecen4330lab7.c:1536: for(currAddr1 = addr2; currAddr1 <= addr3; currAddr1++){
 	mov	_currAddr1,_addr2
 	mov	(_currAddr1 + 1),(_addr2 + 1)
 00120$:
@@ -5005,102 +5109,102 @@ _MOVE:
 	mov	a,(_addr3 + 1)
 	subb	a,(_currAddr1 + 1)
 	jc	00114$
-;	ecen4330lab7.c:1497: data = RAMread(currAddr0);
+;	ecen4330lab7.c:1537: data = RAMread(currAddr0);
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_RAMread
 	mov	_data,dpl
-;	ecen4330lab7.c:1498: RAMwrite(currAddr1, data);
+;	ecen4330lab7.c:1538: RAMwrite(currAddr1, data);
 	mov	_RAMwrite_PARM_2,_data
 	mov	dpl,_currAddr1
 	mov	dph,(_currAddr1 + 1)
 	lcall	_RAMwrite
-;	ecen4330lab7.c:1499: currAddr0++;
+;	ecen4330lab7.c:1539: currAddr0++;
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00169$
 	inc	(_currAddr0 + 1)
 00169$:
-;	ecen4330lab7.c:1496: for(currAddr1 = addr2; currAddr1 <= addr3; currAddr1++){
+;	ecen4330lab7.c:1536: for(currAddr1 = addr2; currAddr1 <= addr3; currAddr1++){
 	inc	_currAddr1
 	clr	a
 	cjne	a,_currAddr1,00120$
 	inc	(_currAddr1 + 1)
 	sjmp	00120$
 00114$:
-;	ecen4330lab7.c:1504: resetLCD();
+;	ecen4330lab7.c:1544: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1505: setTextColor(GREEN, BLACK);
+;	ecen4330lab7.c:1545: setTextColor(GREEN, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0x07e0
 	lcall	_setTextColor
-;	ecen4330lab7.c:1506: LCD_string_write("\nMove complete.\n\n");
-	mov	dptr,#___str_25
+;	ecen4330lab7.c:1546: LCD_string_write("\nMove complete.\n\n");
+	mov	dptr,#___str_27
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1507: delay(100);
+;	ecen4330lab7.c:1547: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:1508: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1548: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1509: LCD_string_write("Returning to\nmain menu.");
-	mov	dptr,#___str_16
+;	ecen4330lab7.c:1549: LCD_string_write("Returning to\nmain menu.");
+	mov	dptr,#___str_18
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1510: delay(100);
+;	ecen4330lab7.c:1550: delay(100);
 	mov	dptr,#0x0064
-;	ecen4330lab7.c:1511: }
+;	ecen4330lab7.c:1551: }
 	ljmp	_delay
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'COUNT'
 ;------------------------------------------------------------
 ;i                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1518: void COUNT(){
+;	ecen4330lab7.c:1558: void COUNT(){
 ;	-----------------------------------------
 ;	 function COUNT
 ;	-----------------------------------------
 _COUNT:
-;	ecen4330lab7.c:1519: endAddrCalc = 0;
+;	ecen4330lab7.c:1559: endAddrCalc = 0;
 	clr	a
 	mov	_endAddrCalc,a
 	mov	(_endAddrCalc + 1),a
 	mov	(_endAddrCalc + 2),a
 	mov	(_endAddrCalc + 3),a
-;	ecen4330lab7.c:1520: addr0 = 0;                      // Starting Address
+;	ecen4330lab7.c:1560: addr0 = 0;                      // Starting Address
 	mov	_addr0,a
 	mov	(_addr0 + 1),a
-;	ecen4330lab7.c:1521: addr1 = 0;                      // End Address
+;	ecen4330lab7.c:1561: addr1 = 0;                      // End Address
 	mov	_addr1,a
 	mov	(_addr1 + 1),a
-;	ecen4330lab7.c:1522: dataSize = 0;                   // Data Size
+;	ecen4330lab7.c:1562: dataSize = 0;                   // Data Size
 	mov	_dataSize,a
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1523: byte1 = 0;                       // Find Value
+;	ecen4330lab7.c:1563: byte1 = 0;                       // Find Value
 	mov	_byte1,a
 	mov	(_byte1 + 1),a
-;	ecen4330lab7.c:1524: count = 0;
+;	ecen4330lab7.c:1564: count = 0;
 	mov	_count,a
 	mov	(_count + 1),a
-;	ecen4330lab7.c:1525: addr3 = 0;						// Count overflow
+;	ecen4330lab7.c:1565: addr3 = 0;						// Count overflow
 	mov	_addr3,a
 	mov	(_addr3 + 1),a
-;	ecen4330lab7.c:1526: dataEnd = 0;
+;	ecen4330lab7.c:1566: dataEnd = 0;
 ;	1-genFromRTrack replaced	mov	_dataEnd,#0x00
 	mov	_dataEnd,a
-;	ecen4330lab7.c:1529: resetLCD();
+;	ecen4330lab7.c:1569: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1530: LCD_string_write("\nEnter\nstarting RAM\naddress:\n\n  0x____");
-	mov	dptr,#___str_26
+;	ecen4330lab7.c:1570: LCD_string_write("\nEnter\nstarting RAM\naddress:\n\n  0x____");
+	mov	dptr,#___str_28
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1531: cursor_x -= 4 * textsize * 6;
+;	ecen4330lab7.c:1571: cursor_x -= 4 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x18
 	mul	ab
@@ -5113,22 +5217,22 @@ _COUNT:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1532: inputRead16();                  // Read input
+;	ecen4330lab7.c:1572: inputRead16();                  // Read input
 	lcall	_inputRead16
-;	ecen4330lab7.c:1533: addr0 = input16;                // Start address
+;	ecen4330lab7.c:1573: addr0 = input16;                // Start address
 	mov	_addr0,_input16
 	mov	(_addr0 + 1),(_input16 + 1)
-;	ecen4330lab7.c:1536: resetLCD();
+;	ecen4330lab7.c:1576: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1537: inputDataSize();                // Prompt & read input
+;	ecen4330lab7.c:1577: inputDataSize();                // Prompt & read input
 	lcall	_inputDataSize
-;	ecen4330lab7.c:1540: resetLCD();
+;	ecen4330lab7.c:1580: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1541: LCD_string_write("\nEnter search\nvalue:\n\n  0x__");
-	mov	dptr,#___str_27
+;	ecen4330lab7.c:1581: LCD_string_write("\nEnter search\nvalue:\n\n  0x__");
+	mov	dptr,#___str_29
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1542: cursor_x -= 2 * textsize * 6;
+;	ecen4330lab7.c:1582: cursor_x -= 2 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x0c
 	mul	ab
@@ -5141,12 +5245,12 @@ _COUNT:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1543: inputRead8();                  // Read input
+;	ecen4330lab7.c:1583: inputRead8();                  // Read input
 	lcall	_inputRead8
-;	ecen4330lab7.c:1544: byte1 = input8;                 // Find value
+;	ecen4330lab7.c:1584: byte1 = input8;                 // Find value
 	mov	_byte1,_input8
 	mov	(_byte1 + 1),#0x00
-;	ecen4330lab7.c:1547: endAddrCalc = addr0 + dataSize;
+;	ecen4330lab7.c:1587: endAddrCalc = addr0 + dataSize;
 	mov	a,_dataSize
 	add	a,_addr0
 	mov	r6,a
@@ -5157,7 +5261,7 @@ _COUNT:
 	mov	(_endAddrCalc + 1),r7
 	mov	(_endAddrCalc + 2),#0x00
 	mov	(_endAddrCalc + 3),#0x00
-;	ecen4330lab7.c:1548: if(endAddrCalc < addr0){ // RAM overflow
+;	ecen4330lab7.c:1588: if(endAddrCalc < addr0){ // RAM overflow
 	mov	r4,_addr0
 	mov	r5,(_addr0 + 1)
 	mov	r6,#0x00
@@ -5172,9 +5276,9 @@ _COUNT:
 	mov	a,(_endAddrCalc + 3)
 	subb	a,r7
 	jnc	00102$
-;	ecen4330lab7.c:1549: addr1 = 0xFFFF;             // Set end address
+;	ecen4330lab7.c:1589: addr1 = 0xFFFF;             // Set end address
 	mov	_addr1,#0xff
-;	ecen4330lab7.c:1550: dataSize = addr1 - addr0;   // Recalculate data size
+;	ecen4330lab7.c:1590: dataSize = addr1 - addr0;   // Recalculate data size
 	mov	a,#0xff
 	mov	(_addr1 + 1),a
 	clr	c
@@ -5185,7 +5289,7 @@ _COUNT:
 	mov	(_dataSize + 1),a
 	sjmp	00103$
 00102$:
-;	ecen4330lab7.c:1553: addr1 = addr0 + dataSize;
+;	ecen4330lab7.c:1593: addr1 = addr0 + dataSize;
 	mov	a,_dataSize
 	add	a,_addr0
 	mov	_addr1,a
@@ -5193,10 +5297,10 @@ _COUNT:
 	addc	a,(_addr0 + 1)
 	mov	(_addr1 + 1),a
 00103$:
-;	ecen4330lab7.c:1571: int i = addr0;
+;	ecen4330lab7.c:1611: int i = addr0;
 	mov	r6,_addr0
 	mov	r7,(_addr0 + 1)
-;	ecen4330lab7.c:1572: while(i <= addr1 && dataEnd == 0){
+;	ecen4330lab7.c:1612: while(i <= addr1 && dataEnd == 0){
 00111$:
 	mov	ar4,r6
 	mov	ar5,r7
@@ -5208,7 +5312,7 @@ _COUNT:
 	jc	00113$
 	mov	a,_dataEnd
 	jnz	00113$
-;	ecen4330lab7.c:1573: data = RAMread(i);
+;	ecen4330lab7.c:1613: data = RAMread(i);
 	mov	dpl,r6
 	mov	dph,r7
 	push	ar7
@@ -5217,43 +5321,43 @@ _COUNT:
 	mov	_data,dpl
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1574: if(data == byte1){
+;	ecen4330lab7.c:1614: if(data == byte1){
 	mov	r4,_data
 	mov	r5,#0x00
 	mov	a,r4
 	cjne	a,_byte1,00107$
 	mov	a,r5
 	cjne	a,(_byte1 + 1),00107$
-;	ecen4330lab7.c:1575: if(count == 0xFFFF){
+;	ecen4330lab7.c:1615: if(count == 0xFFFF){
 	mov	a,#0xff
 	cjne	a,_count,00105$
 	cjne	a,(_count + 1),00105$
-;	ecen4330lab7.c:1576: addr3 = 1;
+;	ecen4330lab7.c:1616: addr3 = 1;
 	mov	_addr3,#0x01
 	mov	(_addr3 + 1),#0x00
 00105$:
-;	ecen4330lab7.c:1578: count++;
+;	ecen4330lab7.c:1618: count++;
 	inc	_count
 	clr	a
 	cjne	a,_count,00173$
 	inc	(_count + 1)
 00173$:
 00107$:
-;	ecen4330lab7.c:1580: if(i == 0xFFFF){
+;	ecen4330lab7.c:1620: if(i == 0xFFFF){
 	mov	ar4,r6
 	mov	ar5,r7
 	cjne	r4,#0xff,00109$
 	cjne	r5,#0xff,00109$
-;	ecen4330lab7.c:1581: dataEnd = 1;
+;	ecen4330lab7.c:1621: dataEnd = 1;
 	mov	_dataEnd,#0x01
 00109$:
-;	ecen4330lab7.c:1583: i++;
+;	ecen4330lab7.c:1623: i++;
 	inc	r6
 	cjne	r6,#0x00,00111$
 	inc	r7
 	sjmp	00111$
 00113$:
-;	ecen4330lab7.c:1586: if(count > 0 || addr3 == 1){
+;	ecen4330lab7.c:1626: if(count > 0 || addr3 == 1){
 	mov	a,_count
 	orl	a,(_count + 1)
 	jnz	00119$
@@ -5266,36 +5370,36 @@ _COUNT:
 	sjmp	00120$
 00179$:
 00119$:
-;	ecen4330lab7.c:1587: resetLCD();
+;	ecen4330lab7.c:1627: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1588: setTextColor(GREEN, BLACK);
+;	ecen4330lab7.c:1628: setTextColor(GREEN, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0x07e0
 	lcall	_setTextColor
-;	ecen4330lab7.c:1589: LCD_string_write("\n0x");
-	mov	dptr,#___str_28
+;	ecen4330lab7.c:1629: LCD_string_write("\n0x");
+	mov	dptr,#___str_30
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1590: HEXtoASCII_8write(byte1);
+;	ecen4330lab7.c:1630: HEXtoASCII_8write(byte1);
 	mov	dpl,_byte1
 	lcall	_HEXtoASCII_8write
-;	ecen4330lab7.c:1591: LCD_string_write(" found\n");
-	mov	dptr,#___str_29
+;	ecen4330lab7.c:1631: LCD_string_write(" found\n");
+	mov	dptr,#___str_31
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1593: if(count > 0){
+;	ecen4330lab7.c:1633: if(count > 0){
 	mov	a,_count
 	orl	a,(_count + 1)
 	jz	00117$
-;	ecen4330lab7.c:1594: HEXtoASCII_16write(count);
+;	ecen4330lab7.c:1634: HEXtoASCII_16write(count);
 	mov	dpl,_count
 	mov	dph,(_count + 1)
 	lcall	_HEXtoASCII_16write
 	sjmp	00118$
 00117$:
-;	ecen4330lab7.c:1596: else if(addr3 == 1){
+;	ecen4330lab7.c:1636: else if(addr3 == 1){
 	mov	a,#0x01
 	cjne	a,_addr3,00181$
 	dec	a
@@ -5304,58 +5408,58 @@ _COUNT:
 00181$:
 	sjmp	00118$
 00182$:
-;	ecen4330lab7.c:1597: LCD_string_write("0x10000");
-	mov	dptr,#___str_30
-	mov	b,#0x80
-	lcall	_LCD_string_write
-00118$:
-;	ecen4330lab7.c:1599: LCD_string_write("\ntimes.");
-	mov	dptr,#___str_31
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:1600: delay(300);
-	mov	dptr,#0x012c
-	lcall	_delay
-;	ecen4330lab7.c:1601: FIND_display();                 // Display dump data
-	ljmp	_FIND_display
-00120$:
-;	ecen4330lab7.c:1604: resetLCD();
-	lcall	_resetLCD
-;	ecen4330lab7.c:1605: LCD_string_write("\n0x");
-	mov	dptr,#___str_28
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:1606: HEXtoASCII_8write(byte1);
-	mov	dpl,_byte1
-	lcall	_HEXtoASCII_8write
-;	ecen4330lab7.c:1607: LCD_string_write(" not\nfound in\nexternal RAM\n");
+;	ecen4330lab7.c:1637: LCD_string_write("0x10000");
 	mov	dptr,#___str_32
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1608: HEXtoASCII_16write(addr0);
-	mov	dpl,_addr0
-	mov	dph,(_addr0 + 1)
-	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1609: LCD_string_write(" -\n");
+00118$:
+;	ecen4330lab7.c:1639: LCD_string_write("\ntimes.");
 	mov	dptr,#___str_33
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1610: HEXtoASCII_16write(addr1);
+;	ecen4330lab7.c:1640: delay(300);
+	mov	dptr,#0x012c
+	lcall	_delay
+;	ecen4330lab7.c:1641: FIND_display();                 // Display dump data
+	ljmp	_FIND_display
+00120$:
+;	ecen4330lab7.c:1644: resetLCD();
+	lcall	_resetLCD
+;	ecen4330lab7.c:1645: LCD_string_write("\n0x");
+	mov	dptr,#___str_30
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1646: HEXtoASCII_8write(byte1);
+	mov	dpl,_byte1
+	lcall	_HEXtoASCII_8write
+;	ecen4330lab7.c:1647: LCD_string_write(" not\nfound in\nexternal RAM\n");
+	mov	dptr,#___str_34
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1648: HEXtoASCII_16write(addr0);
+	mov	dpl,_addr0
+	mov	dph,(_addr0 + 1)
+	lcall	_HEXtoASCII_16write
+;	ecen4330lab7.c:1649: LCD_string_write(" -\n");
+	mov	dptr,#___str_35
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:1650: HEXtoASCII_16write(addr1);
 	mov	dpl,_addr1
 	mov	dph,(_addr1 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1611: delay(300);
+;	ecen4330lab7.c:1651: delay(300);
 	mov	dptr,#0x012c
 	lcall	_delay
-;	ecen4330lab7.c:1612: resetLCD();
+;	ecen4330lab7.c:1652: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1613: LCD_string_write("Returning to\nmain menu.");
-	mov	dptr,#___str_16
+;	ecen4330lab7.c:1653: LCD_string_write("Returning to\nmain menu.");
+	mov	dptr,#___str_18
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1614: delay(200);
+;	ecen4330lab7.c:1654: delay(200);
 	mov	dptr,#0x00c8
-;	ecen4330lab7.c:1616: }
+;	ecen4330lab7.c:1656: }
 	ljmp	_delay
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'DUMP_display'
@@ -5363,36 +5467,36 @@ _COUNT:
 ;i                         Allocated to registers r6 r7 
 ;j                         Allocated to registers r4 r5 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1625: void DUMP_display(){
+;	ecen4330lab7.c:1665: void DUMP_display(){
 ;	-----------------------------------------
 ;	 function DUMP_display
 ;	-----------------------------------------
 _DUMP_display:
-;	ecen4330lab7.c:1628: currAddr1 = 0;              // Page Count
+;	ecen4330lab7.c:1668: currAddr1 = 0;              // Page Count
 	clr	a
 	mov	_currAddr1,a
 	mov	(_currAddr1 + 1),a
-;	ecen4330lab7.c:1629: dataEnd = 0;
+;	ecen4330lab7.c:1669: dataEnd = 0;
 ;	1-genFromRTrack replaced	mov	_dataEnd,#0x00
 	mov	_dataEnd,a
-;	ecen4330lab7.c:1630: addr2 = 0;					// Prev data count
+;	ecen4330lab7.c:1670: addr2 = 0;					// Prev data count
 	mov	_addr2,a
 	mov	(_addr2 + 1),a
-;	ecen4330lab7.c:1632: currAddr0 = addr0;          // Set current address
+;	ecen4330lab7.c:1672: currAddr0 = addr0;          // Set current address
 	mov	_currAddr0,_addr0
 	mov	(_currAddr0 + 1),(_addr0 + 1)
-;	ecen4330lab7.c:1634: do{
+;	ecen4330lab7.c:1674: do{
 00134$:
-;	ecen4330lab7.c:1635: resetLCD();
+;	ecen4330lab7.c:1675: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1636: setTextSize(2);
+;	ecen4330lab7.c:1676: setTextSize(2);
 	mov	dpl,#0x02
 	lcall	_setTextSize
-;	ecen4330lab7.c:1637: LCD_string_write("\n");
-	mov	dptr,#___str_34
+;	ecen4330lab7.c:1677: LCD_string_write("\n");
+	mov	dptr,#___str_36
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1640: if(dataSize >= 10){
+;	ecen4330lab7.c:1680: if(dataSize >= 10){
 	clr	c
 	mov	a,_dataSize
 	subb	a,#0x0a
@@ -5401,26 +5505,26 @@ _DUMP_display:
 	jnc	00258$
 	ljmp	00119$
 00258$:
-;	ecen4330lab7.c:1641: addr2 = 10;
+;	ecen4330lab7.c:1681: addr2 = 10;
 	mov	_addr2,#0x0a
 	mov	(_addr2 + 1),#0x00
-;	ecen4330lab7.c:1643: for(i = 0; i < 10; i++){
+;	ecen4330lab7.c:1683: for(i = 0; i < 10; i++){
 	mov	r6,#0x00
 	mov	r7,#0x00
 00140$:
-;	ecen4330lab7.c:1644: HEXtoASCII_16write(currAddr0);
+;	ecen4330lab7.c:1684: HEXtoASCII_16write(currAddr0);
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	push	ar7
 	push	ar6
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1645: LCD_string_write(": 0x");
-	mov	dptr,#___str_15
+;	ecen4330lab7.c:1685: LCD_string_write(": 0x");
+	mov	dptr,#___str_17
 	mov	b,#0x80
 	lcall	_LCD_string_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1646: for(j = 0; j < dataType; j++){
+;	ecen4330lab7.c:1686: for(j = 0; j < dataType; j++){
 	mov	r4,#0x00
 	mov	r5,#0x00
 00138$:
@@ -5435,7 +5539,7 @@ _DUMP_display:
 	xrl	b,#0x80
 	subb	a,b
 	jnc	00101$
-;	ecen4330lab7.c:1647: HEXtoASCII_8write(RAMread(currAddr0));
+;	ecen4330lab7.c:1687: HEXtoASCII_8write(RAMread(currAddr0));
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	push	ar7
@@ -5448,33 +5552,33 @@ _DUMP_display:
 	pop	ar5
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1648: currAddr0++;
+;	ecen4330lab7.c:1688: currAddr0++;
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00260$
 	inc	(_currAddr0 + 1)
 00260$:
-;	ecen4330lab7.c:1646: for(j = 0; j < dataType; j++){
+;	ecen4330lab7.c:1686: for(j = 0; j < dataType; j++){
 	inc	r4
 	cjne	r4,#0x00,00138$
 	inc	r5
 	sjmp	00138$
 00101$:
-;	ecen4330lab7.c:1650: LCD_string_write("\n");
-	mov	dptr,#___str_34
+;	ecen4330lab7.c:1690: LCD_string_write("\n");
+	mov	dptr,#___str_36
 	mov	b,#0x80
 	push	ar7
 	push	ar6
 	lcall	_LCD_string_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1651: dataSize--;
+;	ecen4330lab7.c:1691: dataSize--;
 	dec	_dataSize
 	mov	a,#0xff
 	cjne	a,_dataSize,00262$
 	dec	(_dataSize + 1)
 00262$:
-;	ecen4330lab7.c:1643: for(i = 0; i < 10; i++){
+;	ecen4330lab7.c:1683: for(i = 0; i < 10; i++){
 	inc	r6
 	cjne	r6,#0x00,00263$
 	inc	r7
@@ -5488,7 +5592,7 @@ _DUMP_display:
 	jnc	00264$
 	ljmp	00140$
 00264$:
-;	ecen4330lab7.c:1653: currAddr1++;        // Next page
+;	ecen4330lab7.c:1693: currAddr1++;        // Next page
 	inc	_currAddr1
 	clr	a
 	cjne	a,_currAddr1,00265$
@@ -5496,7 +5600,7 @@ _DUMP_display:
 00265$:
 	ljmp	00120$
 00119$:
-;	ecen4330lab7.c:1657: else if(dataSize > 0 && dataSize < 10){
+;	ecen4330lab7.c:1697: else if(dataSize > 0 && dataSize < 10){
 	mov	a,_dataSize
 	orl	a,(_dataSize + 1)
 	jnz	00266$
@@ -5510,23 +5614,23 @@ _DUMP_display:
 	jc	00267$
 	ljmp	00115$
 00267$:
-;	ecen4330lab7.c:1658: addr2 = dataSize;
+;	ecen4330lab7.c:1698: addr2 = dataSize;
 	mov	_addr2,_dataSize
 	mov	(_addr2 + 1),(_dataSize + 1)
-;	ecen4330lab7.c:1660: while(dataSize > 0){
+;	ecen4330lab7.c:1700: while(dataSize > 0){
 00104$:
 	mov	a,_dataSize
 	orl	a,(_dataSize + 1)
 	jz	00106$
-;	ecen4330lab7.c:1661: HEXtoASCII_16write(currAddr0);
+;	ecen4330lab7.c:1701: HEXtoASCII_16write(currAddr0);
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1662: LCD_string_write(": 0x");
-	mov	dptr,#___str_15
+;	ecen4330lab7.c:1702: LCD_string_write(": 0x");
+	mov	dptr,#___str_17
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1663: for(j = 0; j < dataType; j++){
+;	ecen4330lab7.c:1703: for(j = 0; j < dataType; j++){
 	mov	r6,#0x00
 	mov	r7,#0x00
 00143$:
@@ -5541,7 +5645,7 @@ _DUMP_display:
 	xrl	b,#0x80
 	subb	a,b
 	jnc	00103$
-;	ecen4330lab7.c:1664: HEXtoASCII_8write(RAMread(currAddr0));
+;	ecen4330lab7.c:1704: HEXtoASCII_8write(RAMread(currAddr0));
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	push	ar7
@@ -5550,23 +5654,23 @@ _DUMP_display:
 	lcall	_HEXtoASCII_8write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1665: currAddr0++;
+;	ecen4330lab7.c:1705: currAddr0++;
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00270$
 	inc	(_currAddr0 + 1)
 00270$:
-;	ecen4330lab7.c:1663: for(j = 0; j < dataType; j++){
+;	ecen4330lab7.c:1703: for(j = 0; j < dataType; j++){
 	inc	r6
 	cjne	r6,#0x00,00143$
 	inc	r7
 	sjmp	00143$
 00103$:
-;	ecen4330lab7.c:1667: LCD_string_write("\n");
-	mov	dptr,#___str_34
+;	ecen4330lab7.c:1707: LCD_string_write("\n");
+	mov	dptr,#___str_36
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1668: dataSize--;
+;	ecen4330lab7.c:1708: dataSize--;
 	dec	_dataSize
 	mov	a,#0xff
 	cjne	a,_dataSize,00272$
@@ -5574,19 +5678,19 @@ _DUMP_display:
 00272$:
 	sjmp	00104$
 00106$:
-;	ecen4330lab7.c:1670: if(addr3 > 0){
+;	ecen4330lab7.c:1710: if(addr3 > 0){
 	mov	a,_addr3
 	orl	a,(_addr3 + 1)
 	jz	00109$
-;	ecen4330lab7.c:1671: HEXtoASCII_16write(currAddr0);
+;	ecen4330lab7.c:1711: HEXtoASCII_16write(currAddr0);
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1672: LCD_string_write(": 0x");
-	mov	dptr,#___str_15
+;	ecen4330lab7.c:1712: LCD_string_write(": 0x");
+	mov	dptr,#___str_17
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1673: for(j = 0; j < addr3; j++){
+;	ecen4330lab7.c:1713: for(j = 0; j < addr3; j++){
 	mov	r6,#0x00
 	mov	r7,#0x00
 00146$:
@@ -5598,7 +5702,7 @@ _DUMP_display:
 	mov	a,r5
 	subb	a,(_addr3 + 1)
 	jnc	00107$
-;	ecen4330lab7.c:1674: HEXtoASCII_8write(RAMread(currAddr0));
+;	ecen4330lab7.c:1714: HEXtoASCII_8write(RAMread(currAddr0));
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	push	ar7
@@ -5607,19 +5711,19 @@ _DUMP_display:
 	lcall	_HEXtoASCII_8write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1675: currAddr0++;
+;	ecen4330lab7.c:1715: currAddr0++;
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00275$
 	inc	(_currAddr0 + 1)
 00275$:
-;	ecen4330lab7.c:1673: for(j = 0; j < addr3; j++){
+;	ecen4330lab7.c:1713: for(j = 0; j < addr3; j++){
 	inc	r6
 	cjne	r6,#0x00,00146$
 	inc	r7
 	sjmp	00146$
 00107$:
-;	ecen4330lab7.c:1677: currAddr0 -= addr3;
+;	ecen4330lab7.c:1717: currAddr0 -= addr3;
 	mov	a,_currAddr0
 	clr	c
 	subb	a,_addr3
@@ -5627,37 +5731,37 @@ _DUMP_display:
 	mov	a,(_currAddr0 + 1)
 	subb	a,(_addr3 + 1)
 	mov	(_currAddr0 + 1),a
-;	ecen4330lab7.c:1678: LCD_string_write("\n");
-	mov	dptr,#___str_34
+;	ecen4330lab7.c:1718: LCD_string_write("\n");
+	mov	dptr,#___str_36
 	mov	b,#0x80
 	lcall	_LCD_string_write
 00109$:
-;	ecen4330lab7.c:1680: currAddr1++; 
+;	ecen4330lab7.c:1720: currAddr1++; 
 	inc	_currAddr1
 	clr	a
 	cjne	a,_currAddr1,00120$
 	inc	(_currAddr1 + 1)
 	sjmp	00120$
 00115$:
-;	ecen4330lab7.c:1683: else if(dataSize == 0 && addr3 > 0){
+;	ecen4330lab7.c:1723: else if(dataSize == 0 && addr3 > 0){
 	mov	a,_dataSize
 	orl	a,(_dataSize + 1)
 	jnz	00120$
 	mov	a,_addr3
 	orl	a,(_addr3 + 1)
 	jz	00120$
-;	ecen4330lab7.c:1684: addr2 = dataSize;
+;	ecen4330lab7.c:1724: addr2 = dataSize;
 	mov	_addr2,_dataSize
 	mov	(_addr2 + 1),(_dataSize + 1)
-;	ecen4330lab7.c:1685: HEXtoASCII_16write(currAddr0);
+;	ecen4330lab7.c:1725: HEXtoASCII_16write(currAddr0);
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1686: LCD_string_write(": 0x");
-	mov	dptr,#___str_15
+;	ecen4330lab7.c:1726: LCD_string_write(": 0x");
+	mov	dptr,#___str_17
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1687: for(j = 0; j < addr3; j++){
+;	ecen4330lab7.c:1727: for(j = 0; j < addr3; j++){
 	mov	r6,#0x00
 	mov	r7,#0x00
 00149$:
@@ -5669,7 +5773,7 @@ _DUMP_display:
 	mov	a,r5
 	subb	a,(_addr3 + 1)
 	jnc	00110$
-;	ecen4330lab7.c:1688: HEXtoASCII_8write(RAMread(currAddr0));
+;	ecen4330lab7.c:1728: HEXtoASCII_8write(RAMread(currAddr0));
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	push	ar7
@@ -5678,29 +5782,29 @@ _DUMP_display:
 	lcall	_HEXtoASCII_8write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1689: currAddr0++;
+;	ecen4330lab7.c:1729: currAddr0++;
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00281$
 	inc	(_currAddr0 + 1)
 00281$:
-;	ecen4330lab7.c:1687: for(j = 0; j < addr3; j++){
+;	ecen4330lab7.c:1727: for(j = 0; j < addr3; j++){
 	inc	r6
 	cjne	r6,#0x00,00149$
 	inc	r7
 	sjmp	00149$
 00110$:
-;	ecen4330lab7.c:1691: LCD_string_write("\n");
-	mov	dptr,#___str_34
+;	ecen4330lab7.c:1731: LCD_string_write("\n");
+	mov	dptr,#___str_36
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1692: currAddr1++; 
+;	ecen4330lab7.c:1732: currAddr1++; 
 	inc	_currAddr1
 	clr	a
 	cjne	a,_currAddr1,00283$
 	inc	(_currAddr1 + 1)
 00283$:
-;	ecen4330lab7.c:1693: currAddr0 -= addr3;
+;	ecen4330lab7.c:1733: currAddr0 -= addr3;
 	mov	a,_currAddr0
 	clr	c
 	subb	a,_addr3
@@ -5709,23 +5813,23 @@ _DUMP_display:
 	subb	a,(_addr3 + 1)
 	mov	(_currAddr0 + 1),a
 00120$:
-;	ecen4330lab7.c:1697: setCursor(0, 250);
+;	ecen4330lab7.c:1737: setCursor(0, 250);
 	mov	_setCursor_PARM_2,#0xfa
 	mov	(_setCursor_PARM_2 + 1),#0x00
 	mov	dptr,#0x0000
 	lcall	_setCursor
-;	ecen4330lab7.c:1698: LCD_string_write("  (0) - Next Page\n  (1) - Prev Page\n  (E) - END\n");
-	mov	dptr,#___str_35
+;	ecen4330lab7.c:1738: LCD_string_write("  (0) - Next Page\n  (1) - Prev Page\n  (E) - END\n");
+	mov	dptr,#___str_37
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1699: HEXtoASCII_16write(currAddr1);
+;	ecen4330lab7.c:1739: HEXtoASCII_16write(currAddr1);
 	mov	dpl,_currAddr1
 	mov	dph,(_currAddr1 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1700: key = keyDetect();
+;	ecen4330lab7.c:1740: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1701: switch (key)
+;	ecen4330lab7.c:1741: switch (key)
 	mov	a,#0x30
 	cjne	a,_key,00284$
 	sjmp	00121$
@@ -5739,21 +5843,21 @@ _DUMP_display:
 	ljmp	00129$
 00286$:
 	ljmp	00130$
-;	ecen4330lab7.c:1705: case '0':
+;	ecen4330lab7.c:1745: case '0':
 00121$:
-;	ecen4330lab7.c:1706: validInput = 1;
+;	ecen4330lab7.c:1746: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:1709: if(dataSize > 0){
+;	ecen4330lab7.c:1749: if(dataSize > 0){
 	mov	a,_dataSize
 	orl	a,(_dataSize + 1)
 	jz	00123$
-;	ecen4330lab7.c:1710: dataEnd = 0;
+;	ecen4330lab7.c:1750: dataEnd = 0;
 	mov	_dataEnd,#0x00
 	ljmp	00135$
 00123$:
-;	ecen4330lab7.c:1716: dataEnd = 0;
+;	ecen4330lab7.c:1756: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:1717: currAddr0 -= (addr2 * dataType); // 1st address of previous page displayed
+;	ecen4330lab7.c:1757: currAddr0 -= (addr2 * dataType); // 1st address of previous page displayed
 	mov	__mulint_PARM_2,_dataType
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dpl,_addr2
@@ -5768,42 +5872,42 @@ _DUMP_display:
 	mov	a,(_currAddr0 + 1)
 	subb	a,r7
 	mov	(_currAddr0 + 1),a
-;	ecen4330lab7.c:1718: dataSize += addr2;  // restore data size of previous page
+;	ecen4330lab7.c:1758: dataSize += addr2;  // restore data size of previous page
 	mov	a,_addr2
 	add	a,_dataSize
 	mov	_dataSize,a
 	mov	a,(_addr2 + 1)
 	addc	a,(_dataSize + 1)
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1719: currAddr1--;
+;	ecen4330lab7.c:1759: currAddr1--;
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00288$
 	dec	(_currAddr1 + 1)
 00288$:
-;	ecen4330lab7.c:1720: resetLCD();
+;	ecen4330lab7.c:1760: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1721: LCD_string_write("\nEnd of Data.");
-	mov	dptr,#___str_36
+;	ecen4330lab7.c:1761: LCD_string_write("\nEnd of Data.");
+	mov	dptr,#___str_38
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1722: delay(200);
+;	ecen4330lab7.c:1762: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:1724: break;
+;	ecen4330lab7.c:1764: break;
 	ljmp	00135$
-;	ecen4330lab7.c:1727: case '1':
+;	ecen4330lab7.c:1767: case '1':
 00125$:
-;	ecen4330lab7.c:1730: if(currAddr1 > 1){
+;	ecen4330lab7.c:1770: if(currAddr1 > 1){
 	clr	c
 	mov	a,#0x01
 	subb	a,_currAddr1
 	clr	a
 	subb	a,(_currAddr1 + 1)
 	jnc	00127$
-;	ecen4330lab7.c:1731: dataEnd = 0;
+;	ecen4330lab7.c:1771: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:1732: currAddr0 -= ((addr2 + 10) * dataType);
+;	ecen4330lab7.c:1772: currAddr0 -= ((addr2 + 10) * dataType);
 	mov	a,#0x0a
 	add	a,_addr2
 	mov	r6,a
@@ -5828,14 +5932,14 @@ _DUMP_display:
 	mov	a,(_currAddr0 + 1)
 	subb	a,r5
 	mov	(_currAddr0 + 1),a
-;	ecen4330lab7.c:1733: currAddr1 -= 2;
+;	ecen4330lab7.c:1773: currAddr1 -= 2;
 	mov	a,_currAddr1
 	add	a,#0xfe
 	mov	_currAddr1,a
 	mov	a,(_currAddr1 + 1)
 	addc	a,#0xff
 	mov	(_currAddr1 + 1),a
-;	ecen4330lab7.c:1734: dataSize += (addr2 + 10);
+;	ecen4330lab7.c:1774: dataSize += (addr2 + 10);
 	mov	a,r6
 	add	a,_dataSize
 	mov	_dataSize,a
@@ -5844,18 +5948,18 @@ _DUMP_display:
 	mov	(_dataSize + 1),a
 	ljmp	00135$
 00127$:
-;	ecen4330lab7.c:1739: dataEnd = 0;
+;	ecen4330lab7.c:1779: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:1740: resetLCD();
+;	ecen4330lab7.c:1780: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1741: LCD_string_write("End of Data");
-	mov	dptr,#___str_37
+;	ecen4330lab7.c:1781: LCD_string_write("End of Data");
+	mov	dptr,#___str_39
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1742: delay(200);
+;	ecen4330lab7.c:1782: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:1743: currAddr0 -= (addr2 * dataType);
+;	ecen4330lab7.c:1783: currAddr0 -= (addr2 * dataType);
 	mov	__mulint_PARM_2,_dataType
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dpl,_addr2
@@ -5870,47 +5974,47 @@ _DUMP_display:
 	mov	a,(_currAddr0 + 1)
 	subb	a,r7
 	mov	(_currAddr0 + 1),a
-;	ecen4330lab7.c:1744: currAddr1--;
+;	ecen4330lab7.c:1784: currAddr1--;
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00290$
 	dec	(_currAddr1 + 1)
 00290$:
-;	ecen4330lab7.c:1745: dataSize += addr2;
+;	ecen4330lab7.c:1785: dataSize += addr2;
 	mov	a,_addr2
 	add	a,_dataSize
 	mov	_dataSize,a
 	mov	a,(_addr2 + 1)
 	addc	a,(_dataSize + 1)
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1747: break;
-;	ecen4330lab7.c:1750: case 'E':
+;	ecen4330lab7.c:1787: break;
+;	ecen4330lab7.c:1790: case 'E':
 	sjmp	00135$
 00129$:
-;	ecen4330lab7.c:1751: resetLCD();
+;	ecen4330lab7.c:1791: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1752: LCD_string_write("\nReturning to\nMain Menu.");
-	mov	dptr,#___str_38
+;	ecen4330lab7.c:1792: LCD_string_write("\nReturning to\nMain Menu.");
+	mov	dptr,#___str_40
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1753: delay(200);
+;	ecen4330lab7.c:1793: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:1754: dataEnd = 1;
+;	ecen4330lab7.c:1794: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:1755: break;
-;	ecen4330lab7.c:1758: default:
+;	ecen4330lab7.c:1795: break;
+;	ecen4330lab7.c:1798: default:
 	sjmp	00135$
 00130$:
-;	ecen4330lab7.c:1759: dataEnd = 0;
+;	ecen4330lab7.c:1799: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:1760: invalidInput();
+;	ecen4330lab7.c:1800: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:1761: if(addr2 > 0 ){
+;	ecen4330lab7.c:1801: if(addr2 > 0 ){
 	mov	a,_addr2
 	orl	a,(_addr2 + 1)
 	jz	00135$
-;	ecen4330lab7.c:1762: currAddr0 -= (addr2 * dataType);
+;	ecen4330lab7.c:1802: currAddr0 -= (addr2 * dataType);
 	mov	__mulint_PARM_2,_dataType
 	mov	(__mulint_PARM_2 + 1),#0x00
 	mov	dpl,_addr2
@@ -5925,68 +6029,68 @@ _DUMP_display:
 	mov	a,(_currAddr0 + 1)
 	subb	a,r7
 	mov	(_currAddr0 + 1),a
-;	ecen4330lab7.c:1763: currAddr1 --;
+;	ecen4330lab7.c:1803: currAddr1 --;
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00292$
 	dec	(_currAddr1 + 1)
 00292$:
-;	ecen4330lab7.c:1764: dataSize += addr2;
+;	ecen4330lab7.c:1804: dataSize += addr2;
 	mov	a,_addr2
 	add	a,_dataSize
 	mov	_dataSize,a
 	mov	a,(_addr2 + 1)
 	addc	a,(_dataSize + 1)
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1765: addr2 = 0;
+;	ecen4330lab7.c:1805: addr2 = 0;
 	clr	a
 	mov	_addr2,a
 	mov	(_addr2 + 1),a
-;	ecen4330lab7.c:1768: }
+;	ecen4330lab7.c:1808: }
 00135$:
-;	ecen4330lab7.c:1769: } while(dataEnd == 0);
+;	ecen4330lab7.c:1809: } while(dataEnd == 0);
 	mov	a,_dataEnd
 	jnz	00293$
 	ljmp	00134$
 00293$:
-;	ecen4330lab7.c:1770: }
+;	ecen4330lab7.c:1810: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'DUMP'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1778: void DUMP(){
+;	ecen4330lab7.c:1818: void DUMP(){
 ;	-----------------------------------------
 ;	 function DUMP
 ;	-----------------------------------------
 _DUMP:
-;	ecen4330lab7.c:1779: endAddrCalc = 0;
+;	ecen4330lab7.c:1819: endAddrCalc = 0;
 	clr	a
 	mov	_endAddrCalc,a
 	mov	(_endAddrCalc + 1),a
 	mov	(_endAddrCalc + 2),a
 	mov	(_endAddrCalc + 3),a
-;	ecen4330lab7.c:1780: addr0 = 0;                      // Source Address
+;	ecen4330lab7.c:1820: addr0 = 0;                      // Source Address
 	mov	_addr0,a
 	mov	(_addr0 + 1),a
-;	ecen4330lab7.c:1781: addr1 = 0;                      // Source End Address
+;	ecen4330lab7.c:1821: addr1 = 0;                      // Source End Address
 	mov	_addr1,a
 	mov	(_addr1 + 1),a
-;	ecen4330lab7.c:1782: dataType = 0;                   // Data Type
+;	ecen4330lab7.c:1822: dataType = 0;                   // Data Type
 ;	1-genFromRTrack replaced	mov	_dataType,#0x00
 	mov	_dataType,a
-;	ecen4330lab7.c:1783: dataSize = 0;                   // Data Size
+;	ecen4330lab7.c:1823: dataSize = 0;                   // Data Size
 	mov	_dataSize,a
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:1784: addr3 = 0;						// Remainder
+;	ecen4330lab7.c:1824: addr3 = 0;						// Remainder
 	mov	_addr3,a
 	mov	(_addr3 + 1),a
-;	ecen4330lab7.c:1787: resetLCD();
+;	ecen4330lab7.c:1827: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1788: LCD_string_write("\nEnter source\nstarting RAM\naddress:\n\n  0x____");
-	mov	dptr,#___str_39
+;	ecen4330lab7.c:1828: LCD_string_write("\nEnter source\nstarting RAM\naddress:\n\n  0x____");
+	mov	dptr,#___str_41
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1789: cursor_x -= 4 * textsize * 6;
+;	ecen4330lab7.c:1829: cursor_x -= 4 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x18
 	mul	ab
@@ -5999,18 +6103,18 @@ _DUMP:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1790: inputRead16();                  // Read input
+;	ecen4330lab7.c:1830: inputRead16();                  // Read input
 	lcall	_inputRead16
-;	ecen4330lab7.c:1791: addr0 = input16;                // Set starting address
+;	ecen4330lab7.c:1831: addr0 = input16;                // Set starting address
 	mov	_addr0,_input16
 	mov	(_addr0 + 1),(_input16 + 1)
-;	ecen4330lab7.c:1794: inputDataType();                // Prompt & read input
+;	ecen4330lab7.c:1834: inputDataType();                // Prompt & read input
 	lcall	_inputDataType
-;	ecen4330lab7.c:1797: resetLCD();
+;	ecen4330lab7.c:1837: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1798: inputDataSize();                // Prompt & read input
+;	ecen4330lab7.c:1838: inputDataSize();                // Prompt & read input
 	lcall	_inputDataSize
-;	ecen4330lab7.c:1801: endAddrCalc = addr0 + (dataType * dataSize);
+;	ecen4330lab7.c:1841: endAddrCalc = addr0 + (dataType * dataSize);
 	mov	r6,_dataType
 	mov	r7,#0x00
 	mov	__mulint_PARM_2,_dataSize
@@ -6034,7 +6138,7 @@ _DUMP:
 	mov	(_endAddrCalc + 1),r3
 	mov	(_endAddrCalc + 2),#0x00
 	mov	(_endAddrCalc + 3),#0x00
-;	ecen4330lab7.c:1802: if(endAddrCalc < addr0){ // RAM overflow
+;	ecen4330lab7.c:1842: if(endAddrCalc < addr0){ // RAM overflow
 	mov	r0,_addr0
 	mov	r1,(_addr0 + 1)
 	mov	r2,#0x00
@@ -6049,12 +6153,12 @@ _DUMP:
 	mov	a,(_endAddrCalc + 3)
 	subb	a,r3
 	jnc	00102$
-;	ecen4330lab7.c:1803: addr1 = 0xFFFF;             // Set end address
+;	ecen4330lab7.c:1843: addr1 = 0xFFFF;             // Set end address
 	mov	_addr1,#0xff
 	mov	(_addr1 + 1),#0xff
 	sjmp	00103$
 00102$:
-;	ecen4330lab7.c:1806: addr1 = addr0 + (dataType * dataSize) - 1;
+;	ecen4330lab7.c:1846: addr1 = addr0 + (dataType * dataSize) - 1;
 	mov	a,r4
 	add	a,_addr0
 	mov	r4,a
@@ -6068,7 +6172,7 @@ _DUMP:
 	addc	a,#0xff
 	mov	(_addr1 + 1),a
 00103$:
-;	ecen4330lab7.c:1808: dataSize = ((addr1 - addr0) + 1) / dataType;   // Recalculate data size
+;	ecen4330lab7.c:1848: dataSize = ((addr1 - addr0) + 1) / dataType;   // Recalculate data size
 	mov	a,_addr1
 	clr	c
 	subb	a,_addr0
@@ -6095,7 +6199,7 @@ _DUMP:
 	pop	ar5
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1809: addr3 = ((addr1 - addr0) + 1) % dataType;
+;	ecen4330lab7.c:1849: addr3 = ((addr1 - addr0) + 1) % dataType;
 	mov	__moduint_PARM_2,r6
 	mov	(__moduint_PARM_2 + 1),r7
 	mov	dpl,r4
@@ -6103,52 +6207,52 @@ _DUMP:
 	lcall	__moduint
 	mov	_addr3,dpl
 	mov	(_addr3 + 1),dph
-;	ecen4330lab7.c:1828: DUMP_display();                 // Display dump data
-;	ecen4330lab7.c:1829: }
+;	ecen4330lab7.c:1868: DUMP_display();                 // Display dump data
+;	ecen4330lab7.c:1869: }
 	ljmp	_DUMP_display
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'EDIT_display'
 ;------------------------------------------------------------
 ;addr                      Allocated to registers r6 r7 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1839: void EDIT_display(unsigned int addr){
+;	ecen4330lab7.c:1879: void EDIT_display(unsigned int addr){
 ;	-----------------------------------------
 ;	 function EDIT_display
 ;	-----------------------------------------
 _EDIT_display:
-;	ecen4330lab7.c:1842: data = RAMread(addr);
+;	ecen4330lab7.c:1882: data = RAMread(addr);
 	mov	r6,dpl
 	mov  r7,dph
 	push	ar7
 	push	ar6
 	lcall	_RAMread
 	mov	_data,dpl
-;	ecen4330lab7.c:1845: resetLCD();
+;	ecen4330lab7.c:1885: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1846: LCD_string_write("\n");
-	mov	dptr,#___str_34
+;	ecen4330lab7.c:1886: LCD_string_write("\n");
+	mov	dptr,#___str_36
 	mov	b,#0x80
 	lcall	_LCD_string_write
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1847: HEXtoASCII_16write(addr);
+;	ecen4330lab7.c:1887: HEXtoASCII_16write(addr);
 	mov	dpl,r6
 	mov	dph,r7
 	push	ar7
 	push	ar6
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1848: LCD_string_write(": 0x");
-	mov	dptr,#___str_15
+;	ecen4330lab7.c:1888: LCD_string_write(": 0x");
+	mov	dptr,#___str_17
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1849: HEXtoASCII_8write(data);
+;	ecen4330lab7.c:1889: HEXtoASCII_8write(data);
 	mov	dpl,_data
 	lcall	_HEXtoASCII_8write
-;	ecen4330lab7.c:1852: LCD_string_write("\n\nNew value:\n  0x__");
-	mov	dptr,#___str_40
+;	ecen4330lab7.c:1892: LCD_string_write("\n\nNew value:\n  0x__");
+	mov	dptr,#___str_42
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1853: cursor_x -= 2 * textsize * 6;
+;	ecen4330lab7.c:1893: cursor_x -= 2 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x0c
 	mul	ab
@@ -6161,45 +6265,45 @@ _EDIT_display:
 	mov	a,(_cursor_x + 1)
 	subb	a,r5
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1854: inputRead8();
+;	ecen4330lab7.c:1894: inputRead8();
 	lcall	_inputRead8
 	pop	ar6
 	pop	ar7
-;	ecen4330lab7.c:1855: RAMwrite(addr, input8);
+;	ecen4330lab7.c:1895: RAMwrite(addr, input8);
 	mov	_RAMwrite_PARM_2,_input8
 	mov	dpl,r6
 	mov	dph,r7
 	lcall	_RAMwrite
-;	ecen4330lab7.c:1858: LCD_string_write("\n\n\n\n(1) Edit next\nRAM location\n\n");
-	mov	dptr,#___str_41
+;	ecen4330lab7.c:1898: LCD_string_write("\n\n\n\n(1) Edit next\nRAM location\n\n");
+	mov	dptr,#___str_43
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1859: LCD_string_write("(E) End");
-	mov	dptr,#___str_42
+;	ecen4330lab7.c:1899: LCD_string_write("(E) End");
+	mov	dptr,#___str_44
 	mov	b,#0x80
-;	ecen4330lab7.c:1860: }
+;	ecen4330lab7.c:1900: }
 	ljmp	_LCD_string_write
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'EDIT'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1872: void EDIT(){
+;	ecen4330lab7.c:1912: void EDIT(){
 ;	-----------------------------------------
 ;	 function EDIT
 ;	-----------------------------------------
 _EDIT:
-;	ecen4330lab7.c:1873: dataEnd = 0;
+;	ecen4330lab7.c:1913: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:1874: scrollEnd = 0;
+;	ecen4330lab7.c:1914: scrollEnd = 0;
 	mov	_scrollEnd,#0x00
-;	ecen4330lab7.c:1875: validInput = 0;
+;	ecen4330lab7.c:1915: validInput = 0;
 	mov	_validInput,#0x00
-;	ecen4330lab7.c:1878: resetLCD();
+;	ecen4330lab7.c:1918: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1879: LCD_string_write("\nEnter\nstarting RAM\naddress:\n\n  0x____");
-	mov	dptr,#___str_26
+;	ecen4330lab7.c:1919: LCD_string_write("\nEnter\nstarting RAM\naddress:\n\n  0x____");
+	mov	dptr,#___str_28
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1880: cursor_x -= 4 * textsize * 6;
+;	ecen4330lab7.c:1920: cursor_x -= 4 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x18
 	mul	ab
@@ -6212,130 +6316,130 @@ _EDIT:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:1883: inputRead16();
+;	ecen4330lab7.c:1923: inputRead16();
 	lcall	_inputRead16
-;	ecen4330lab7.c:1886: while(scrollEnd == 0 && dataEnd == 0){
+;	ecen4330lab7.c:1926: while(scrollEnd == 0 && dataEnd == 0){
 00112$:
 	mov	a,_scrollEnd
 	jnz	00114$
 	mov	a,_dataEnd
 	jnz	00114$
-;	ecen4330lab7.c:1889: do
+;	ecen4330lab7.c:1929: do
 00108$:
-;	ecen4330lab7.c:1891: EDIT_display(input16);
+;	ecen4330lab7.c:1931: EDIT_display(input16);
 	mov	dpl,_input16
 	mov	dph,(_input16 + 1)
 	lcall	_EDIT_display
-;	ecen4330lab7.c:1892: key = keyDetect();
+;	ecen4330lab7.c:1932: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:1894: switch (key)
+;	ecen4330lab7.c:1934: switch (key)
 	mov	a,#0x31
 	cjne	a,_key,00153$
 	sjmp	00101$
 00153$:
 	mov	a,#0x45
-;	ecen4330lab7.c:1898: case '1':
+;	ecen4330lab7.c:1938: case '1':
 	cjne	a,_key,00106$
 	sjmp	00105$
 00101$:
-;	ecen4330lab7.c:1899: validInput = 1;
+;	ecen4330lab7.c:1939: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:1902: if(input16 == 0xFFFF){
+;	ecen4330lab7.c:1942: if(input16 == 0xFFFF){
 	mov	a,#0xff
 	cjne	a,_input16,00103$
 	cjne	a,(_input16 + 1),00103$
-;	ecen4330lab7.c:1903: scrollEnd = 1;
+;	ecen4330lab7.c:1943: scrollEnd = 1;
 	mov	_scrollEnd,#0x01
 	sjmp	00109$
 00103$:
-;	ecen4330lab7.c:1908: input16++;
+;	ecen4330lab7.c:1948: input16++;
 	inc	_input16
 	clr	a
 	cjne	a,_input16,00157$
 	inc	(_input16 + 1)
 00157$:
-;	ecen4330lab7.c:1909: scrollEnd = 0;
+;	ecen4330lab7.c:1949: scrollEnd = 0;
 	mov	_scrollEnd,#0x00
-;	ecen4330lab7.c:1911: break;
-;	ecen4330lab7.c:1914: case 'E':
+;	ecen4330lab7.c:1951: break;
+;	ecen4330lab7.c:1954: case 'E':
 	sjmp	00109$
 00105$:
-;	ecen4330lab7.c:1915: validInput = 1;
+;	ecen4330lab7.c:1955: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:1916: dataEnd = 1;
+;	ecen4330lab7.c:1956: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:1917: break;
-;	ecen4330lab7.c:1920: default:
+;	ecen4330lab7.c:1957: break;
+;	ecen4330lab7.c:1960: default:
 	sjmp	00109$
 00106$:
-;	ecen4330lab7.c:1921: validInput = 0;
+;	ecen4330lab7.c:1961: validInput = 0;
 	mov	_validInput,#0x00
-;	ecen4330lab7.c:1922: invalidInput();
+;	ecen4330lab7.c:1962: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:1924: }
+;	ecen4330lab7.c:1964: }
 00109$:
-;	ecen4330lab7.c:1925: } while (validInput == 0);
+;	ecen4330lab7.c:1965: } while (validInput == 0);
 	mov	a,_validInput
 	jz	00108$
 	sjmp	00112$
 00114$:
-;	ecen4330lab7.c:1929: resetLCD();
+;	ecen4330lab7.c:1969: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1930: if(scrollEnd == 1){
+;	ecen4330lab7.c:1970: if(scrollEnd == 1){
 	mov	a,#0x01
 	cjne	a,_scrollEnd,00116$
-;	ecen4330lab7.c:1931: setTextColor(RED, BLACK);
+;	ecen4330lab7.c:1971: setTextColor(RED, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xf800
 	lcall	_setTextColor
-;	ecen4330lab7.c:1932: LCD_string_write("\nEnd of data.\n");
-	mov	dptr,#___str_43
+;	ecen4330lab7.c:1972: LCD_string_write("\nEnd of data.\n");
+	mov	dptr,#___str_45
 	mov	b,#0x80
 	lcall	_LCD_string_write
 00116$:
-;	ecen4330lab7.c:1936: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:1976: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:1937: LCD_string_write("\nReturning to\nmain menu.");
-	mov	dptr,#___str_44
+;	ecen4330lab7.c:1977: LCD_string_write("\nReturning to\nmain menu.");
+	mov	dptr,#___str_46
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1938: delay(200);
+;	ecen4330lab7.c:1978: delay(200);
 	mov	dptr,#0x00c8
-;	ecen4330lab7.c:1939: }
+;	ecen4330lab7.c:1979: }
 	ljmp	_delay
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'FIND_display'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:1953: void FIND_display(){
+;	ecen4330lab7.c:1993: void FIND_display(){
 ;	-----------------------------------------
 ;	 function FIND_display
 ;	-----------------------------------------
 _FIND_display:
-;	ecen4330lab7.c:1954: addr2 = 0;						// first addr of page
+;	ecen4330lab7.c:1994: addr2 = 0;						// first addr of page
 	clr	a
 	mov	_addr2,a
 	mov	(_addr2 + 1),a
-;	ecen4330lab7.c:1955: currAddr1 = 0;					// page count
+;	ecen4330lab7.c:1995: currAddr1 = 0;					// page count
 	mov	_currAddr1,a
 	mov	(_currAddr1 + 1),a
-;	ecen4330lab7.c:1956: resetLCD();
+;	ecen4330lab7.c:1996: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1957: currAddr0 = addr0;				// Load starting address
+;	ecen4330lab7.c:1997: currAddr0 = addr0;				// Load starting address
 	mov	_currAddr0,_addr0
 	mov	(_currAddr0 + 1),(_addr0 + 1)
-;	ecen4330lab7.c:1958: data = RAMread(currAddr0);		// Read data from starting address
+;	ecen4330lab7.c:1998: data = RAMread(currAddr0);		// Read data from starting address
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_RAMread
 	mov	_data,dpl
-;	ecen4330lab7.c:1961: while(data != byte1 && currAddr0 < addr1){
+;	ecen4330lab7.c:2001: while(data != byte1 && currAddr0 < addr1){
 00102$:
 	mov	r6,_data
 	mov	r7,#0x00
@@ -6351,20 +6455,20 @@ _FIND_display:
 	mov	a,(_currAddr0 + 1)
 	subb	a,(_addr1 + 1)
 	jnc	00104$
-;	ecen4330lab7.c:1962: currAddr0++;				// Next RAM address
+;	ecen4330lab7.c:2002: currAddr0++;				// Next RAM address
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00237$
 	inc	(_currAddr0 + 1)
 00237$:
-;	ecen4330lab7.c:1963: data = RAMread(currAddr0);	// Read data from RAM
+;	ecen4330lab7.c:2003: data = RAMread(currAddr0);	// Read data from RAM
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_RAMread
 	mov	_data,dpl
 	sjmp	00102$
 00104$:
-;	ecen4330lab7.c:1967: if(data != byte1 && currAddr0 == addr1){
+;	ecen4330lab7.c:2007: if(data != byte1 && currAddr0 == addr1){
 	mov	r6,_data
 	mov	r7,#0x00
 	mov	a,r6
@@ -6377,131 +6481,131 @@ _FIND_display:
 	cjne	a,_currAddr0,00142$
 	mov	a,(_addr1 + 1)
 	cjne	a,(_currAddr0 + 1),00142$
-;	ecen4330lab7.c:1968: resetLCD();
+;	ecen4330lab7.c:2008: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1969: LCD_string_write("\n0x");
-	mov	dptr,#___str_28
+;	ecen4330lab7.c:2009: LCD_string_write("\n0x");
+	mov	dptr,#___str_30
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1970: HEXtoASCII_8write(byte1);
+;	ecen4330lab7.c:2010: HEXtoASCII_8write(byte1);
 	mov	dpl,_byte1
 	lcall	_HEXtoASCII_8write
-;	ecen4330lab7.c:1971: LCD_string_write(" not\nfound in\naddress range\n\n");
-	mov	dptr,#___str_45
+;	ecen4330lab7.c:2011: LCD_string_write(" not\nfound in\naddress range\n\n");
+	mov	dptr,#___str_47
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1972: HEXtoASCII_16write(addr0);
+;	ecen4330lab7.c:2012: HEXtoASCII_16write(addr0);
 	mov	dpl,_addr0
 	mov	dph,(_addr0 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1973: LCD_string_write(" -\n");
-	mov	dptr,#___str_33
+;	ecen4330lab7.c:2013: LCD_string_write(" -\n");
+	mov	dptr,#___str_35
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1974: HEXtoASCII_16write(addr1);
+;	ecen4330lab7.c:2014: HEXtoASCII_16write(addr1);
 	mov	dpl,_addr1
 	mov	dph,(_addr1 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:1975: delay(200);
+;	ecen4330lab7.c:2015: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:1976: resetLCD();
+;	ecen4330lab7.c:2016: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1977: LCD_string_write("Returning to\nmain menu.");
-	mov	dptr,#___str_16
+;	ecen4330lab7.c:2017: LCD_string_write("Returning to\nmain menu.");
+	mov	dptr,#___str_18
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1978: delay(100);
+;	ecen4330lab7.c:2018: delay(100);
 	mov	dptr,#0x0064
 	ljmp	_delay
 00142$:
-;	ecen4330lab7.c:1986: resetLCD();
+;	ecen4330lab7.c:2026: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1987: setTextColor(GREEN, BLACK);
+;	ecen4330lab7.c:2027: setTextColor(GREEN, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0x07e0
 	lcall	_setTextColor
-;	ecen4330lab7.c:1988: LCD_string_write("\n0x");
-	mov	dptr,#___str_28
+;	ecen4330lab7.c:2028: LCD_string_write("\n0x");
+	mov	dptr,#___str_30
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1989: HEXtoASCII_8write(byte1);
+;	ecen4330lab7.c:2029: HEXtoASCII_8write(byte1);
 	mov	dpl,_byte1
 	lcall	_HEXtoASCII_8write
-;	ecen4330lab7.c:1990: LCD_string_write(" found at\nthe following\naddresses:\n\n");
-	mov	dptr,#___str_46
+;	ecen4330lab7.c:2030: LCD_string_write(" found at\nthe following\naddresses:\n\n");
+	mov	dptr,#___str_48
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:1991: delay(200);
+;	ecen4330lab7.c:2031: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:1992: addr2 = currAddr0;					// Load first found address of page
+;	ecen4330lab7.c:2032: addr2 = currAddr0;					// Load first found address of page
 	mov	_addr2,_currAddr0
 	mov	(_addr2 + 1),(_currAddr0 + 1)
-;	ecen4330lab7.c:1997: do{
+;	ecen4330lab7.c:2037: do{
 00138$:
-;	ecen4330lab7.c:1998: resetLCD();
+;	ecen4330lab7.c:2038: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:1999: currAddr0 = addr2;				// Load current address	
+;	ecen4330lab7.c:2039: currAddr0 = addr2;				// Load current address	
 	mov	_currAddr0,_addr2
 	mov	(_currAddr0 + 1),(_addr2 + 1)
-;	ecen4330lab7.c:2000: HEXtoASCII_16write(currAddr0);	// Write found address to LCD
+;	ecen4330lab7.c:2040: HEXtoASCII_16write(currAddr0);	// Write found address to LCD
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:2001: count = 7;						// Set page address display counter
+;	ecen4330lab7.c:2041: count = 7;						// Set page address display counter
 	mov	_count,#0x07
 	mov	(_count + 1),#0x00
-;	ecen4330lab7.c:2002: currAddr1++;					// Increment page count
+;	ecen4330lab7.c:2042: currAddr1++;					// Increment page count
 	inc	_currAddr1
 	clr	a
 	cjne	a,_currAddr1,00241$
 	inc	(_currAddr1 + 1)
 00241$:
-;	ecen4330lab7.c:2008: if(currAddr0 != 0xFFFF){
+;	ecen4330lab7.c:2048: if(currAddr0 != 0xFFFF){
 	mov	a,#0xff
 	cjne	a,_currAddr0,00242$
 	cjne	a,(_currAddr0 + 1),00242$
 	sjmp	00112$
 00242$:
-;	ecen4330lab7.c:2009: do{
+;	ecen4330lab7.c:2049: do{
 00108$:
-;	ecen4330lab7.c:2010: currAddr0++;				// Next RAM address
+;	ecen4330lab7.c:2050: currAddr0++;				// Next RAM address
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00243$
 	inc	(_currAddr0 + 1)
 00243$:
-;	ecen4330lab7.c:2011: data = RAMread(currAddr0);	// Read data
+;	ecen4330lab7.c:2051: data = RAMread(currAddr0);	// Read data
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_RAMread
 	mov	_data,dpl
-;	ecen4330lab7.c:2012: if(data == byte1){			// If data = search value
+;	ecen4330lab7.c:2052: if(data == byte1){			// If data = search value
 	mov	r6,_data
 	mov	r7,#0x00
 	mov	a,r6
 	cjne	a,_byte1,00109$
 	mov	a,r7
 	cjne	a,(_byte1 + 1),00109$
-;	ecen4330lab7.c:2013: count--;				// Decrement page address display counter
+;	ecen4330lab7.c:2053: count--;				// Decrement page address display counter
 	dec	_count
 	mov	a,#0xff
 	cjne	a,_count,00246$
 	dec	(_count + 1)
 00246$:
-;	ecen4330lab7.c:2014: LCD_string_write("\n");	// Next line
-	mov	dptr,#___str_34
+;	ecen4330lab7.c:2054: LCD_string_write("\n");	// Next line
+	mov	dptr,#___str_36
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2015: HEXtoASCII_16write(currAddr0);	// Display found address
+;	ecen4330lab7.c:2055: HEXtoASCII_16write(currAddr0);	// Display found address
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_HEXtoASCII_16write
 00109$:
-;	ecen4330lab7.c:2017: }while(currAddr0 < addr1 && count > 0);
+;	ecen4330lab7.c:2057: }while(currAddr0 < addr1 && count > 0);
 	clr	c
 	mov	a,_currAddr0
 	subb	a,_addr1
@@ -6512,32 +6616,32 @@ _FIND_display:
 	orl	a,(_count + 1)
 	jnz	00108$
 00112$:
-;	ecen4330lab7.c:2024: setCursor(0, 250);
+;	ecen4330lab7.c:2064: setCursor(0, 250);
 	mov	_setCursor_PARM_2,#0xfa
 	mov	(_setCursor_PARM_2 + 1),#0x00
 	mov	dptr,#0x0000
 	lcall	_setCursor
-;	ecen4330lab7.c:2025: setTextSize(2);
+;	ecen4330lab7.c:2065: setTextSize(2);
 	mov	dpl,#0x02
 	lcall	_setTextSize
-;	ecen4330lab7.c:2026: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:2066: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:2027: LCD_string_write("  (0) - Next Page\n  (1) - Prev Page\n  (E) - END\n");
-	mov	dptr,#___str_35
+;	ecen4330lab7.c:2067: LCD_string_write("  (0) - Next Page\n  (1) - Prev Page\n  (E) - END\n");
+	mov	dptr,#___str_37
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2028: HEXtoASCII_16write(currAddr1);
+;	ecen4330lab7.c:2068: HEXtoASCII_16write(currAddr1);
 	mov	dpl,_currAddr1
 	mov	dph,(_currAddr1 + 1)
 	lcall	_HEXtoASCII_16write
-;	ecen4330lab7.c:2034: key = keyDetect();
+;	ecen4330lab7.c:2074: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:2035: switch (key)
+;	ecen4330lab7.c:2075: switch (key)
 	mov	a,#0x30
 	cjne	a,_key,00249$
 	sjmp	00113$
@@ -6551,56 +6655,56 @@ _FIND_display:
 	ljmp	00135$
 00251$:
 	ljmp	00136$
-;	ecen4330lab7.c:2041: case '0':
+;	ecen4330lab7.c:2081: case '0':
 00113$:
-;	ecen4330lab7.c:2046: if(currAddr0 >= addr1){
+;	ecen4330lab7.c:2086: if(currAddr0 >= addr1){
 	clr	c
 	mov	a,_currAddr0
 	subb	a,_addr1
 	mov	a,(_currAddr0 + 1)
 	subb	a,(_addr1 + 1)
 	jc	00117$
-;	ecen4330lab7.c:2047: resetLCD();
+;	ecen4330lab7.c:2087: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2048: LCD_string_write("End of Data.");
-	mov	dptr,#___str_47
+;	ecen4330lab7.c:2088: LCD_string_write("End of Data.");
+	mov	dptr,#___str_49
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2049: delay(200);
+;	ecen4330lab7.c:2089: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:2050: currAddr1--;	// Reset page count to last displayed page 
+;	ecen4330lab7.c:2090: currAddr1--;	// Reset page count to last displayed page 
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00253$
 	dec	(_currAddr1 + 1)
 00253$:
 	ljmp	00139$
-;	ecen4330lab7.c:2063: do{
+;	ecen4330lab7.c:2103: do{
 00117$:
-;	ecen4330lab7.c:2064: currAddr0++;			// Next RAM address
+;	ecen4330lab7.c:2104: currAddr0++;			// Next RAM address
 	inc	_currAddr0
 	clr	a
 	cjne	a,_currAddr0,00254$
 	inc	(_currAddr0 + 1)
 00254$:
-;	ecen4330lab7.c:2065: data = RAMread(currAddr0);	// Read data
+;	ecen4330lab7.c:2105: data = RAMread(currAddr0);	// Read data
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_RAMread
 	mov	_data,dpl
-;	ecen4330lab7.c:2066: if(data == byte1){			// If data matches search value
+;	ecen4330lab7.c:2106: if(data == byte1){			// If data matches search value
 	mov	r6,_data
 	mov	r7,#0x00
 	mov	a,r6
 	cjne	a,_byte1,00118$
 	mov	a,r7
 	cjne	a,(_byte1 + 1),00118$
-;	ecen4330lab7.c:2067: addr2 = currAddr0;		// Set first address of display page
+;	ecen4330lab7.c:2107: addr2 = currAddr0;		// Set first address of display page
 	mov	_addr2,_currAddr0
 	mov	(_addr2 + 1),(_currAddr0 + 1)
 00118$:
-;	ecen4330lab7.c:2069: }while(currAddr0 < addr1 && data != byte1);
+;	ecen4330lab7.c:2109: }while(currAddr0 < addr1 && data != byte1);
 	clr	c
 	mov	a,_currAddr0
 	subb	a,_addr1
@@ -6614,7 +6718,7 @@ _FIND_display:
 	mov	a,r7
 	cjne	a,(_byte1 + 1),00117$
 00119$:
-;	ecen4330lab7.c:2075: if(currAddr0 >= addr1 && data != byte1){
+;	ecen4330lab7.c:2115: if(currAddr0 >= addr1 && data != byte1){
 	clr	c
 	mov	a,_currAddr0
 	subb	a,_addr1
@@ -6631,26 +6735,26 @@ _FIND_display:
 	cjne	a,(_byte1 + 1),00261$
 	ljmp	00139$
 00261$:
-;	ecen4330lab7.c:2076: resetLCD();
+;	ecen4330lab7.c:2116: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2077: LCD_string_write("End of Data.");
-	mov	dptr,#___str_47
+;	ecen4330lab7.c:2117: LCD_string_write("End of Data.");
+	mov	dptr,#___str_49
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2078: delay(200);
+;	ecen4330lab7.c:2118: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:2079: currAddr1--;	// Reset page count to last displayed page
+;	ecen4330lab7.c:2119: currAddr1--;	// Reset page count to last displayed page
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00262$
 	dec	(_currAddr1 + 1)
 00262$:
-;	ecen4330lab7.c:2084: break;
+;	ecen4330lab7.c:2124: break;
 	ljmp	00139$
-;	ecen4330lab7.c:2091: case '1':
+;	ecen4330lab7.c:2131: case '1':
 00126$:
-;	ecen4330lab7.c:2095: if(currAddr1 == 1){
+;	ecen4330lab7.c:2135: if(currAddr1 == 1){
 	mov	a,#0x01
 	cjne	a,_currAddr1,00263$
 	dec	a
@@ -6659,16 +6763,16 @@ _FIND_display:
 00263$:
 	sjmp	00133$
 00264$:
-;	ecen4330lab7.c:2096: resetLCD();
+;	ecen4330lab7.c:2136: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2097: LCD_string_write("End of Data.");
-	mov	dptr,#___str_47
+;	ecen4330lab7.c:2137: LCD_string_write("End of Data.");
+	mov	dptr,#___str_49
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2098: delay(200);
+;	ecen4330lab7.c:2138: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:2099: currAddr1--;	// Reset page count to last displayed page
+;	ecen4330lab7.c:2139: currAddr1--;	// Reset page count to last displayed page
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00265$
@@ -6676,14 +6780,14 @@ _FIND_display:
 00265$:
 	ljmp	00139$
 00133$:
-;	ecen4330lab7.c:2107: currAddr0 = addr2;
+;	ecen4330lab7.c:2147: currAddr0 = addr2;
 	mov	_currAddr0,_addr2
 	mov	(_currAddr0 + 1),(_addr2 + 1)
-;	ecen4330lab7.c:2108: count = 0;
+;	ecen4330lab7.c:2148: count = 0;
 	clr	a
 	mov	_count,a
 	mov	(_count + 1),a
-;	ecen4330lab7.c:2109: while(count < 8){
+;	ecen4330lab7.c:2149: while(count < 8){
 00129$:
 	clr	c
 	mov	a,_count
@@ -6691,112 +6795,112 @@ _FIND_display:
 	mov	a,(_count + 1)
 	subb	a,#0x00
 	jnc	00131$
-;	ecen4330lab7.c:2110: currAddr0--;
+;	ecen4330lab7.c:2150: currAddr0--;
 	dec	_currAddr0
 	mov	a,#0xff
 	cjne	a,_currAddr0,00267$
 	dec	(_currAddr0 + 1)
 00267$:
-;	ecen4330lab7.c:2111: data = RAMread(currAddr0);
+;	ecen4330lab7.c:2151: data = RAMread(currAddr0);
 	mov	dpl,_currAddr0
 	mov	dph,(_currAddr0 + 1)
 	lcall	_RAMread
 	mov	_data,dpl
-;	ecen4330lab7.c:2112: if(data == byte1){
+;	ecen4330lab7.c:2152: if(data == byte1){
 	mov	r6,_data
 	mov	r7,#0x00
 	mov	a,r6
 	cjne	a,_byte1,00129$
 	mov	a,r7
 	cjne	a,(_byte1 + 1),00129$
-;	ecen4330lab7.c:2113: count++;
+;	ecen4330lab7.c:2153: count++;
 	inc	_count
 	clr	a
 	cjne	a,_count,00129$
 	inc	(_count + 1)
 	sjmp	00129$
 00131$:
-;	ecen4330lab7.c:2116: addr2 = currAddr0;
+;	ecen4330lab7.c:2156: addr2 = currAddr0;
 	mov	_addr2,_currAddr0
 	mov	(_addr2 + 1),(_currAddr0 + 1)
-;	ecen4330lab7.c:2117: currAddr1 -= 2;
+;	ecen4330lab7.c:2157: currAddr1 -= 2;
 	mov	a,_currAddr1
 	add	a,#0xfe
 	mov	_currAddr1,a
 	mov	a,(_currAddr1 + 1)
 	addc	a,#0xff
 	mov	(_currAddr1 + 1),a
-;	ecen4330lab7.c:2119: break;
-;	ecen4330lab7.c:2125: case 'E':
+;	ecen4330lab7.c:2159: break;
+;	ecen4330lab7.c:2165: case 'E':
 	sjmp	00139$
 00135$:
-;	ecen4330lab7.c:2126: resetLCD();
+;	ecen4330lab7.c:2166: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2127: LCD_string_write("Returning to\nmain menu.");
-	mov	dptr,#___str_16
+;	ecen4330lab7.c:2167: LCD_string_write("Returning to\nmain menu.");
+	mov	dptr,#___str_18
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2128: delay(200);
+;	ecen4330lab7.c:2168: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:2129: break;
-;	ecen4330lab7.c:2135: default:
+;	ecen4330lab7.c:2169: break;
+;	ecen4330lab7.c:2175: default:
 	sjmp	00139$
 00136$:
-;	ecen4330lab7.c:2136: invalidInput();
+;	ecen4330lab7.c:2176: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:2137: currAddr1--;
+;	ecen4330lab7.c:2177: currAddr1--;
 	dec	_currAddr1
 	mov	a,#0xff
 	cjne	a,_currAddr1,00271$
 	dec	(_currAddr1 + 1)
 00271$:
-;	ecen4330lab7.c:2140: }
+;	ecen4330lab7.c:2180: }
 00139$:
-;	ecen4330lab7.c:2141: }while(key != 'E');
+;	ecen4330lab7.c:2181: }while(key != 'E');
 	mov	a,#0x45
 	cjne	a,_key,00272$
 	ret
 00272$:
 	ljmp	00138$
-;	ecen4330lab7.c:2143: }
+;	ecen4330lab7.c:2183: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'FIND'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2151: void FIND(){
+;	ecen4330lab7.c:2191: void FIND(){
 ;	-----------------------------------------
 ;	 function FIND
 ;	-----------------------------------------
 _FIND:
-;	ecen4330lab7.c:2152: endAddrCalc = 0;
+;	ecen4330lab7.c:2192: endAddrCalc = 0;
 	clr	a
 	mov	_endAddrCalc,a
 	mov	(_endAddrCalc + 1),a
 	mov	(_endAddrCalc + 2),a
 	mov	(_endAddrCalc + 3),a
-;	ecen4330lab7.c:2153: addr0 = 0;                      // Starting Address
+;	ecen4330lab7.c:2193: addr0 = 0;                      // Starting Address
 	mov	_addr0,a
 	mov	(_addr0 + 1),a
-;	ecen4330lab7.c:2154: addr1 = 0;                      // End Address
+;	ecen4330lab7.c:2194: addr1 = 0;                      // End Address
 	mov	_addr1,a
 	mov	(_addr1 + 1),a
-;	ecen4330lab7.c:2155: dataType = 0;                   // Data Type
+;	ecen4330lab7.c:2195: dataType = 0;                   // Data Type
 ;	1-genFromRTrack replaced	mov	_dataType,#0x00
 	mov	_dataType,a
-;	ecen4330lab7.c:2156: dataSize = 0;                   // Data Size
+;	ecen4330lab7.c:2196: dataSize = 0;                   // Data Size
 	mov	_dataSize,a
 	mov	(_dataSize + 1),a
-;	ecen4330lab7.c:2157: byte1 = 0;                       // Find Value
+;	ecen4330lab7.c:2197: byte1 = 0;                       // Find Value
 	mov	_byte1,a
 	mov	(_byte1 + 1),a
-;	ecen4330lab7.c:2160: resetLCD();
+;	ecen4330lab7.c:2200: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2161: LCD_string_write("\nEnter\nstarting RAM\naddress:\n\n   0x____");
-	mov	dptr,#___str_48
+;	ecen4330lab7.c:2201: LCD_string_write("\nEnter\nstarting RAM\naddress:\n\n   0x____");
+	mov	dptr,#___str_50
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2162: cursor_x -= 4 * textsize * 6;
+;	ecen4330lab7.c:2202: cursor_x -= 4 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x18
 	mul	ab
@@ -6809,22 +6913,22 @@ _FIND:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:2163: inputRead16();                  // Read input
+;	ecen4330lab7.c:2203: inputRead16();                  // Read input
 	lcall	_inputRead16
-;	ecen4330lab7.c:2164: addr0 = input16;                // Start address
+;	ecen4330lab7.c:2204: addr0 = input16;                // Start address
 	mov	_addr0,_input16
 	mov	(_addr0 + 1),(_input16 + 1)
-;	ecen4330lab7.c:2170: resetLCD();
+;	ecen4330lab7.c:2210: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2171: inputDataSize();                // Prompt & read input
+;	ecen4330lab7.c:2211: inputDataSize();                // Prompt & read input
 	lcall	_inputDataSize
-;	ecen4330lab7.c:2174: resetLCD();
+;	ecen4330lab7.c:2214: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2175: LCD_string_write("\nEnter search\nvalue:\n\n   0x__");
-	mov	dptr,#___str_49
+;	ecen4330lab7.c:2215: LCD_string_write("\nEnter search\nvalue:\n\n   0x__");
+	mov	dptr,#___str_51
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2176: cursor_x -= 2 * textsize * 6;
+;	ecen4330lab7.c:2216: cursor_x -= 2 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x0c
 	mul	ab
@@ -6837,12 +6941,12 @@ _FIND:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:2177: inputRead8();                  // Read input
+;	ecen4330lab7.c:2217: inputRead8();                  // Read input
 	lcall	_inputRead8
-;	ecen4330lab7.c:2178: byte1 = input8;                 // Find value
+;	ecen4330lab7.c:2218: byte1 = input8;                 // Find value
 	mov	_byte1,_input8
 	mov	(_byte1 + 1),#0x00
-;	ecen4330lab7.c:2181: endAddrCalc = addr0 + dataSize;
+;	ecen4330lab7.c:2221: endAddrCalc = addr0 + dataSize;
 	mov	a,_dataSize
 	add	a,_addr0
 	mov	r6,a
@@ -6853,7 +6957,7 @@ _FIND:
 	mov	(_endAddrCalc + 1),r7
 	mov	(_endAddrCalc + 2),#0x00
 	mov	(_endAddrCalc + 3),#0x00
-;	ecen4330lab7.c:2182: if(endAddrCalc < addr0){ // RAM overflow
+;	ecen4330lab7.c:2222: if(endAddrCalc < addr0){ // RAM overflow
 	mov	r4,_addr0
 	mov	r5,(_addr0 + 1)
 	mov	r6,#0x00
@@ -6868,9 +6972,9 @@ _FIND:
 	mov	a,(_endAddrCalc + 3)
 	subb	a,r7
 	jnc	00102$
-;	ecen4330lab7.c:2183: addr1 = 0xFFFF;             // Set end address
+;	ecen4330lab7.c:2223: addr1 = 0xFFFF;             // Set end address
 	mov	_addr1,#0xff
-;	ecen4330lab7.c:2184: dataSize = addr1 - addr0;   // Recalculate data size
+;	ecen4330lab7.c:2224: dataSize = addr1 - addr0;   // Recalculate data size
 	mov	a,#0xff
 	mov	(_addr1 + 1),a
 	clr	c
@@ -6881,7 +6985,7 @@ _FIND:
 	mov	(_dataSize + 1),a
 	sjmp	00103$
 00102$:
-;	ecen4330lab7.c:2187: addr1 = addr0 + dataSize;
+;	ecen4330lab7.c:2227: addr1 = addr0 + dataSize;
 	mov	a,_dataSize
 	add	a,_addr0
 	mov	_addr1,a
@@ -6889,94 +6993,98 @@ _FIND:
 	addc	a,(_addr0 + 1)
 	mov	(_addr1 + 1),a
 00103$:
-;	ecen4330lab7.c:2207: FIND_display();                 // Display dump data
-;	ecen4330lab7.c:2208: }
+;	ecen4330lab7.c:2247: FIND_display();                 // Display dump data
+;	ecen4330lab7.c:2248: }
 	ljmp	_FIND_display
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'resetLCD1'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2210: void resetLCD1(){
+;	ecen4330lab7.c:2250: void resetLCD1(){
 ;	-----------------------------------------
 ;	 function resetLCD1
 ;	-----------------------------------------
 _resetLCD1:
-;	ecen4330lab7.c:2211: setRotation(4);
+;	ecen4330lab7.c:2251: setRotation(4);
 	mov	dpl,#0x04
 	lcall	_setRotation
-;	ecen4330lab7.c:2212: setTextColor(GRAY, BLACK);
+;	ecen4330lab7.c:2252: setTextColor(GRAY, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xd6ba
 	lcall	_setTextColor
-;	ecen4330lab7.c:2213: setTextSize(3);
+;	ecen4330lab7.c:2253: setTextSize(3);
 	mov	dpl,#0x03
 	lcall	_setTextSize
-;	ecen4330lab7.c:2214: fillScreen(BLACK);
+;	ecen4330lab7.c:2254: fillScreen(BLACK);
 	mov	dptr,#0x0000
 	lcall	_fillScreen
-;	ecen4330lab7.c:2215: setCursor(0, 0);
+;	ecen4330lab7.c:2255: setCursor(0, 0);
 	clr	a
 	mov	_setCursor_PARM_2,a
 	mov	(_setCursor_PARM_2 + 1),a
 	mov	dptr,#0x0000
-;	ecen4330lab7.c:2216: }
+;	ecen4330lab7.c:2256: }
 	ljmp	_setCursor
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'UART_dataRate'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2235: void UART_dataRate() {
+;	ecen4330lab7.c:2275: void UART_dataRate() {
 ;	-----------------------------------------
 ;	 function UART_dataRate
 ;	-----------------------------------------
 _UART_dataRate:
-;	ecen4330lab7.c:2236: resetLCD();
+;	ecen4330lab7.c:2276: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2237: do {
+;	ecen4330lab7.c:2277: do {
 00119$:
-;	ecen4330lab7.c:2238: LCD_string_write("\n(1) 1200\n");
-	mov	dptr,#___str_50
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2239: LCD_string_write("(2) 2400\n");
-	mov	dptr,#___str_51
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2240: LCD_string_write("(3) 4800\n");
+;	ecen4330lab7.c:2278: LCD_string_write("\n(1) 1200\n");
 	mov	dptr,#___str_52
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2241: LCD_string_write("(4) 9600\n");
+;	ecen4330lab7.c:2279: LCD_string_write("(2) 2400\n");
 	mov	dptr,#___str_53
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2242: LCD_string_write("(5) 19200\n\n");
+;	ecen4330lab7.c:2280: LCD_string_write("(3) 4800\n");
 	mov	dptr,#___str_54
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2243: LCD_string_write("Current:\n");
+;	ecen4330lab7.c:2281: LCD_string_write("(4) 9600\n");
 	mov	dptr,#___str_55
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2244: if(PCON == 0x80){
+;	ecen4330lab7.c:2282: LCD_string_write("(5) 19200\n\n");
+	mov	dptr,#___str_56
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2283: LCD_string_write("Current:\n");
+	mov	dptr,#___str_57
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2285: dataRate = PCON & 0x80;
+	mov	a,_PCON
+	anl	a,#0x80
+	mov	_dataRate,a
+;	ecen4330lab7.c:2287: if(dataRate == 0x80){
 	mov	a,#0x80
-	cjne	a,_PCON,00110$
-;	ecen4330lab7.c:2245: if (TH1 == 0xFD){
+	cjne	a,_dataRate,00110$
+;	ecen4330lab7.c:2288: if (TH1 == 0xFD){
 	mov	a,#0xfd
 	cjne	a,_TH1,00102$
-;	ecen4330lab7.c:2246: LCD_string_write("19200\n");
-	mov	dptr,#___str_56
+;	ecen4330lab7.c:2289: LCD_string_write("19200\n");
+	mov	dptr,#___str_58
 	mov	b,#0x80
 	lcall	_LCD_string_write
 	sjmp	00111$
 00102$:
-;	ecen4330lab7.c:2249: LCD_string_write("Invalid\n");
-	mov	dptr,#___str_57
+;	ecen4330lab7.c:2292: LCD_string_write("Invalid\n");
+	mov	dptr,#___str_59
 	mov	b,#0x80
 	lcall	_LCD_string_write
 	sjmp	00111$
 00110$:
-;	ecen4330lab7.c:2253: switch(TH1) {
+;	ecen4330lab7.c:2296: switch(TH1) {
 	mov	r7,_TH1
 	cjne	r7,#0xe8,00180$
 	sjmp	00104$
@@ -6987,45 +7095,45 @@ _UART_dataRate:
 	cjne	r7,#0xfa,00182$
 	sjmp	00106$
 00182$:
-;	ecen4330lab7.c:2254: case 0xE8:
+;	ecen4330lab7.c:2297: case 0xE8:
 	cjne	r7,#0xfd,00111$
 	sjmp	00107$
 00104$:
-;	ecen4330lab7.c:2255: LCD_string_write("1200\n");
-	mov	dptr,#___str_58
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2256: break;
-;	ecen4330lab7.c:2257: case 0xF4:
-	sjmp	00111$
-00105$:
-;	ecen4330lab7.c:2258: LCD_string_write("2400\n");
-	mov	dptr,#___str_59
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2259: break;
-;	ecen4330lab7.c:2260: case 0xFA:
-	sjmp	00111$
-00106$:
-;	ecen4330lab7.c:2261: LCD_string_write("4800\n");
+;	ecen4330lab7.c:2298: LCD_string_write("1200\n");
 	mov	dptr,#___str_60
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2262: break;
-;	ecen4330lab7.c:2263: case 0xFD:
+;	ecen4330lab7.c:2299: break;
+;	ecen4330lab7.c:2300: case 0xF4:
 	sjmp	00111$
-00107$:
-;	ecen4330lab7.c:2264: LCD_string_write("9600\n");
+00105$:
+;	ecen4330lab7.c:2301: LCD_string_write("2400\n");
 	mov	dptr,#___str_61
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2266: }
-00111$:
-;	ecen4330lab7.c:2268: LCD_string_write("\n   _");
+;	ecen4330lab7.c:2302: break;
+;	ecen4330lab7.c:2303: case 0xFA:
+	sjmp	00111$
+00106$:
+;	ecen4330lab7.c:2304: LCD_string_write("4800\n");
 	mov	dptr,#___str_62
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2269: cursor_x -= 1 * textsize * 6;
+;	ecen4330lab7.c:2305: break;
+;	ecen4330lab7.c:2306: case 0xFD:
+	sjmp	00111$
+00107$:
+;	ecen4330lab7.c:2307: LCD_string_write("9600\n");
+	mov	dptr,#___str_63
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2309: }
+00111$:
+;	ecen4330lab7.c:2312: LCD_string_write("\n   _");
+	mov	dptr,#___str_64
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2313: cursor_x -= 1 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x06
 	mul	ab
@@ -7038,10 +7146,10 @@ _UART_dataRate:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:2270: key = keyDetect();
+;	ecen4330lab7.c:2314: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:2271: switch (key){
+;	ecen4330lab7.c:2315: switch (key){
 	mov	a,#0x31
 	cjne	a,_key,00184$
 	sjmp	00112$
@@ -7063,170 +7171,170 @@ _UART_dataRate:
 	sjmp	00116$
 00188$:
 	ljmp	00117$
-;	ecen4330lab7.c:2273: case '1':
+;	ecen4330lab7.c:2317: case '1':
 00112$:
-;	ecen4330lab7.c:2274: validInput = 1;
+;	ecen4330lab7.c:2318: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:2275: TH1 = 0xE8;
+;	ecen4330lab7.c:2319: TH1 = 0xE8;                 // 1200 baud
 	mov	_TH1,#0xe8
-;	ecen4330lab7.c:2276: PCON = 0x00;
-	mov	_PCON,#0x00
-;	ecen4330lab7.c:2277: dataEnd = 1;
+;	ecen4330lab7.c:2320: PCON &= 0x7F;               // SMOD = 0
+	anl	_PCON,#0x7f
+;	ecen4330lab7.c:2321: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2278: LCD_string_write("1\n");
-	mov	dptr,#___str_63
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2279: break;
-	ljmp	00120$
-;	ecen4330lab7.c:2280: case '2':
-00113$:
-;	ecen4330lab7.c:2281: validInput = 1;
-	mov	_validInput,#0x01
-;	ecen4330lab7.c:2282: TH1 = 0xF4;
-	mov	_TH1,#0xf4
-;	ecen4330lab7.c:2283: PCON = 0x00;
-	mov	_PCON,#0x00
-;	ecen4330lab7.c:2284: dataEnd = 1;
-	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2285: LCD_string_write("2\n");
-	mov	dptr,#___str_64
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2286: break;
-;	ecen4330lab7.c:2287: case '3':
-	sjmp	00120$
-00114$:
-;	ecen4330lab7.c:2288: validInput = 1;
-	mov	_validInput,#0x01
-;	ecen4330lab7.c:2289: TH1 = 0xFA;
-	mov	_TH1,#0xfa
-;	ecen4330lab7.c:2290: PCON = 0x00;
-	mov	_PCON,#0x00
-;	ecen4330lab7.c:2291: dataEnd = 1;
-	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2292: LCD_string_write("3\n");
+;	ecen4330lab7.c:2322: LCD_string_write("1\n");
 	mov	dptr,#___str_65
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2293: break;
-;	ecen4330lab7.c:2294: case '4':
-	sjmp	00120$
-00115$:
-;	ecen4330lab7.c:2295: validInput = 1;
+;	ecen4330lab7.c:2323: break;
+	ljmp	00120$
+;	ecen4330lab7.c:2324: case '2':
+00113$:
+;	ecen4330lab7.c:2325: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:2296: TH1 = 0xFD;
-	mov	_TH1,#0xfd
-;	ecen4330lab7.c:2297: PCON = 0x00;
-	mov	_PCON,#0x00
-;	ecen4330lab7.c:2298: dataEnd = 1;
+;	ecen4330lab7.c:2326: TH1 = 0xF4;
+	mov	_TH1,#0xf4
+;	ecen4330lab7.c:2327: PCON &= 0x7F;               // SMOD = 0
+	anl	_PCON,#0x7f
+;	ecen4330lab7.c:2328: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2299: LCD_string_write("4\n");
+;	ecen4330lab7.c:2329: LCD_string_write("2\n");
 	mov	dptr,#___str_66
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2300: break;
-;	ecen4330lab7.c:2301: case '5':
+;	ecen4330lab7.c:2330: break;
+;	ecen4330lab7.c:2331: case '3':
 	sjmp	00120$
-00116$:
-;	ecen4330lab7.c:2302: validInput = 1;
+00114$:
+;	ecen4330lab7.c:2332: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:2303: TH1 = 0xFD;
-	mov	_TH1,#0xfd
-;	ecen4330lab7.c:2304: PCON = 0x80;
-	mov	_PCON,#0x80
-;	ecen4330lab7.c:2305: dataEnd = 1;
+;	ecen4330lab7.c:2333: TH1 = 0xFA;
+	mov	_TH1,#0xfa
+;	ecen4330lab7.c:2334: PCON &= 0x7F;               // SMOD = 0
+	anl	_PCON,#0x7f
+;	ecen4330lab7.c:2335: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2306: LCD_string_write("5\n");
+;	ecen4330lab7.c:2336: LCD_string_write("3\n");
 	mov	dptr,#___str_67
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2307: break;
-;	ecen4330lab7.c:2308: default:
+;	ecen4330lab7.c:2337: break;
+;	ecen4330lab7.c:2338: case '4':
 	sjmp	00120$
-00117$:
-;	ecen4330lab7.c:2309: validInput = 0;
-	mov	_validInput,#0x00
-;	ecen4330lab7.c:2310: LCD_string_write("X\n");
+00115$:
+;	ecen4330lab7.c:2339: validInput = 1;
+	mov	_validInput,#0x01
+;	ecen4330lab7.c:2340: TH1 = 0xFD;
+	mov	_TH1,#0xfd
+;	ecen4330lab7.c:2341: PCON &= 0x7F;               // SMOD = 0
+	anl	_PCON,#0x7f
+;	ecen4330lab7.c:2342: dataEnd = 1;
+	mov	_dataEnd,#0x01
+;	ecen4330lab7.c:2343: LCD_string_write("4\n");
 	mov	dptr,#___str_68
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2311: invalidInput();
+;	ecen4330lab7.c:2344: break;
+;	ecen4330lab7.c:2345: case '5':
+	sjmp	00120$
+00116$:
+;	ecen4330lab7.c:2346: validInput = 1;
+	mov	_validInput,#0x01
+;	ecen4330lab7.c:2347: TH1 = 0xFD;
+	mov	_TH1,#0xfd
+;	ecen4330lab7.c:2348: PCON |= 0x80;               // SMOD = 1
+	orl	_PCON,#0x80
+;	ecen4330lab7.c:2349: dataEnd = 1;
+	mov	_dataEnd,#0x01
+;	ecen4330lab7.c:2350: LCD_string_write("5\n");
+	mov	dptr,#___str_69
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2351: break;
+;	ecen4330lab7.c:2352: default:
+	sjmp	00120$
+00117$:
+;	ecen4330lab7.c:2353: validInput = 0;
+	mov	_validInput,#0x00
+;	ecen4330lab7.c:2354: LCD_string_write("X\n");
+	mov	dptr,#___str_70
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2355: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:2312: dataEnd = 0;
+;	ecen4330lab7.c:2356: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2314: }
+;	ecen4330lab7.c:2358: }
 00120$:
-;	ecen4330lab7.c:2315: } while(!dataEnd);
+;	ecen4330lab7.c:2359: } while(!dataEnd);
 	mov	a,_dataEnd
 	jnz	00189$
 	ljmp	00119$
 00189$:
-;	ecen4330lab7.c:2316: delay(200);
+;	ecen4330lab7.c:2360: delay(200);
 	mov	dptr,#0x00c8
-;	ecen4330lab7.c:2323: }
+;	ecen4330lab7.c:2361: }
 	ljmp	_delay
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'UART_dataBits'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2325: void UART_dataBits() {
+;	ecen4330lab7.c:2363: void UART_dataBits() {
 ;	-----------------------------------------
 ;	 function UART_dataBits
 ;	-----------------------------------------
 _UART_dataBits:
-;	ecen4330lab7.c:2326: resetLCD();
+;	ecen4330lab7.c:2364: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2327: do {
+;	ecen4330lab7.c:2365: do {
 00108$:
-;	ecen4330lab7.c:2328: LCD_string_write("\nData Bits\n\n");
-	mov	dptr,#___str_69
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2329: LCD_string_write("(1) 8\n");
-	mov	dptr,#___str_70
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2330: LCD_string_write("(2) 9\n");
+;	ecen4330lab7.c:2366: LCD_string_write("\nData Bits\n\n");
 	mov	dptr,#___str_71
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2331: LCD_string_write("\nCurrent: ");
+;	ecen4330lab7.c:2367: LCD_string_write("(1) 8\n");
 	mov	dptr,#___str_72
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2332: dataBits = SCON & 0xC0;
+;	ecen4330lab7.c:2368: LCD_string_write("(2) 9\n");
+	mov	dptr,#___str_73
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2369: LCD_string_write("\nCurrent: ");
+	mov	dptr,#___str_74
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2370: dataBits = SCON & 0xC0;
 	mov	a,_SCON
 	anl	a,#0xc0
 	mov	_dataBits,a
-;	ecen4330lab7.c:2333: switch(dataBits) {
+;	ecen4330lab7.c:2371: switch(dataBits) {
 	mov	a,#0x40
 	cjne	a,_dataBits,00137$
 	sjmp	00101$
 00137$:
 	mov	a,#0xc0
-;	ecen4330lab7.c:2334: case 0x40:
+;	ecen4330lab7.c:2372: case 0x40:
 	cjne	a,_dataBits,00103$
 	sjmp	00102$
 00101$:
-;	ecen4330lab7.c:2335: LCD_string_write("8\n");
-	mov	dptr,#___str_73
+;	ecen4330lab7.c:2373: LCD_string_write("8\n");
+	mov	dptr,#___str_75
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2336: break;
-;	ecen4330lab7.c:2337: case 0xC0:
+;	ecen4330lab7.c:2374: break;
+;	ecen4330lab7.c:2375: case 0xC0:
 	sjmp	00103$
 00102$:
-;	ecen4330lab7.c:2338: LCD_string_write("9\n");
-	mov	dptr,#___str_74
+;	ecen4330lab7.c:2376: LCD_string_write("9\n");
+	mov	dptr,#___str_2
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2340: }
+;	ecen4330lab7.c:2378: }
 00103$:
-;	ecen4330lab7.c:2341: LCD_string_write("\n   _");
-	mov	dptr,#___str_62
+;	ecen4330lab7.c:2379: LCD_string_write("\n   _");
+	mov	dptr,#___str_64
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2342: cursor_x -= 1 * textsize * 6;
+;	ecen4330lab7.c:2380: cursor_x -= 1 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x06
 	mul	ab
@@ -7239,101 +7347,106 @@ _UART_dataBits:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:2343: key = keyDetect();
+;	ecen4330lab7.c:2381: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:2344: switch (key){
+;	ecen4330lab7.c:2382: switch (key){
 	mov	a,#0x31
 	cjne	a,_key,00139$
 	sjmp	00104$
 00139$:
 	mov	a,#0x32
-;	ecen4330lab7.c:2346: case '1':
+;	ecen4330lab7.c:2384: case '1':
 	cjne	a,_key,00106$
 	sjmp	00105$
 00104$:
-;	ecen4330lab7.c:2347: validInput = 1;
+;	ecen4330lab7.c:2385: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:2348: SCON = SCON & 0x7F;
+;	ecen4330lab7.c:2386: SCON = SCON & 0x7F;
 	anl	_SCON,#0x7f
-;	ecen4330lab7.c:2349: dataEnd = 1;
+;	ecen4330lab7.c:2387: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2350: LCD_string_write("1\n");
-	mov	dptr,#___str_63
+;	ecen4330lab7.c:2388: LCD_string_write("1\n");
+	mov	dptr,#___str_65
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2351: break;
-;	ecen4330lab7.c:2352: case '2':
+;	ecen4330lab7.c:2389: break;
+;	ecen4330lab7.c:2390: case '2':
 	sjmp	00109$
 00105$:
-;	ecen4330lab7.c:2353: validInput = 1;
+;	ecen4330lab7.c:2391: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:2354: SCON = SCON | 0xC0;
+;	ecen4330lab7.c:2392: SCON = SCON | 0xC0;
 	orl	_SCON,#0xc0
-;	ecen4330lab7.c:2355: dataEnd = 1;
+;	ecen4330lab7.c:2393: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2356: LCD_string_write("2\n");
-	mov	dptr,#___str_64
+;	ecen4330lab7.c:2394: LCD_string_write("2\n");
+	mov	dptr,#___str_66
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2357: break;
-;	ecen4330lab7.c:2358: default:
+;	ecen4330lab7.c:2395: delay(200);
+	mov	dptr,#0x00c8
+	lcall	_delay
+;	ecen4330lab7.c:2396: UART_parity();
+	lcall	_UART_parity
+;	ecen4330lab7.c:2397: break;
+;	ecen4330lab7.c:2398: default:
 	sjmp	00109$
 00106$:
-;	ecen4330lab7.c:2359: validInput = 0;
+;	ecen4330lab7.c:2399: validInput = 0;
 	mov	_validInput,#0x00
-;	ecen4330lab7.c:2360: LCD_string_write("X\n");
-	mov	dptr,#___str_68
+;	ecen4330lab7.c:2400: LCD_string_write("X\n");
+	mov	dptr,#___str_70
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2361: invalidInput();
+;	ecen4330lab7.c:2401: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:2362: dataEnd = 0;
+;	ecen4330lab7.c:2402: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2364: }
+;	ecen4330lab7.c:2404: }
 00109$:
-;	ecen4330lab7.c:2365: } while(!dataEnd);
+;	ecen4330lab7.c:2405: } while(!dataEnd);
 	mov	a,_dataEnd
 	jnz	00141$
 	ljmp	00108$
 00141$:
-;	ecen4330lab7.c:2366: delay(200);
+;	ecen4330lab7.c:2406: delay(200);
 	mov	dptr,#0x00c8
-;	ecen4330lab7.c:2373: }
+;	ecen4330lab7.c:2407: }
 	ljmp	_delay
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'UART_parity'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2376: void UART_parity() {
+;	ecen4330lab7.c:2410: void UART_parity() {
 ;	-----------------------------------------
 ;	 function UART_parity
 ;	-----------------------------------------
 _UART_parity:
-;	ecen4330lab7.c:2377: resetLCD();
+;	ecen4330lab7.c:2411: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2378: do {
+;	ecen4330lab7.c:2412: do {
 00110$:
-;	ecen4330lab7.c:2379: LCD_string_write("\nParity\n\n");
-	mov	dptr,#___str_75
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2380: LCD_string_write("(1) Even\n");
+;	ecen4330lab7.c:2413: LCD_string_write("\nParity\n\n");
 	mov	dptr,#___str_76
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2381: LCD_string_write("(2) Odd\n");
+;	ecen4330lab7.c:2414: LCD_string_write("(1) Even\n");
 	mov	dptr,#___str_77
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2382: LCD_string_write("(3) None\n");
+;	ecen4330lab7.c:2415: LCD_string_write("(2) Odd\n");
 	mov	dptr,#___str_78
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2383: LCD_string_write("\nCurrent: ");
-	mov	dptr,#___str_72
+;	ecen4330lab7.c:2416: LCD_string_write("(3) None\n");
+	mov	dptr,#___str_79
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2384: switch(parity) {
+;	ecen4330lab7.c:2417: LCD_string_write("\nCurrent: ");
+	mov	dptr,#___str_74
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2418: switch(parity) {
 	clr	a
 	cjne	a,_parity,00147$
 	sjmp	00101$
@@ -7343,37 +7456,37 @@ _UART_parity:
 	sjmp	00102$
 00148$:
 	mov	a,#0x02
-;	ecen4330lab7.c:2385: case 0:
+;	ecen4330lab7.c:2419: case 0:
 	cjne	a,_parity,00104$
 	sjmp	00103$
 00101$:
-;	ecen4330lab7.c:2386: LCD_string_write("Even\n");
-	mov	dptr,#___str_79
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2387: break;
-;	ecen4330lab7.c:2388: case 1:
-	sjmp	00104$
-00102$:
-;	ecen4330lab7.c:2389: LCD_string_write("Odd\n");
+;	ecen4330lab7.c:2420: LCD_string_write("Even\n");
 	mov	dptr,#___str_80
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2390: break;
-;	ecen4330lab7.c:2391: case 2:
+;	ecen4330lab7.c:2421: break;
+;	ecen4330lab7.c:2422: case 1:
 	sjmp	00104$
-00103$:
-;	ecen4330lab7.c:2392: LCD_string_write("None\n");
+00102$:
+;	ecen4330lab7.c:2423: LCD_string_write("Odd\n");
 	mov	dptr,#___str_81
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2394: }
-00104$:
-;	ecen4330lab7.c:2395: LCD_string_write("\n   _");
-	mov	dptr,#___str_62
+;	ecen4330lab7.c:2424: break;
+;	ecen4330lab7.c:2425: case 2:
+	sjmp	00104$
+00103$:
+;	ecen4330lab7.c:2426: LCD_string_write("None\n");
+	mov	dptr,#___str_82
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2396: cursor_x -= 1 * textsize * 6;
+;	ecen4330lab7.c:2428: }
+00104$:
+;	ecen4330lab7.c:2429: LCD_string_write("\n   _");
+	mov	dptr,#___str_64
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2430: cursor_x -= 1 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x06
 	mul	ab
@@ -7386,10 +7499,10 @@ _UART_parity:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:2397: key = keyDetect();
+;	ecen4330lab7.c:2431: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:2398: switch (key){
+;	ecen4330lab7.c:2432: switch (key){
 	mov	a,#0x31
 	cjne	a,_key,00150$
 	sjmp	00105$
@@ -7399,88 +7512,137 @@ _UART_parity:
 	sjmp	00106$
 00151$:
 	mov	a,#0x33
-;	ecen4330lab7.c:2400: case '1':
+;	ecen4330lab7.c:2434: case '1':
 	cjne	a,_key,00108$
 	sjmp	00107$
 00105$:
-;	ecen4330lab7.c:2401: validInput = 1;
+;	ecen4330lab7.c:2435: validInput = 1;
 	mov	_validInput,#0x01
-;	ecen4330lab7.c:2402: parity = 0;
+;	ecen4330lab7.c:2436: parity = 0;
 	mov	_parity,#0x00
-;	ecen4330lab7.c:2403: dataEnd = 1;
+;	ecen4330lab7.c:2437: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2404: LCD_string_write("1\n");
-	mov	dptr,#___str_63
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2405: break;
-;	ecen4330lab7.c:2406: case '2':
-	sjmp	00111$
-00106$:
-;	ecen4330lab7.c:2407: validInput = 1;
-	mov	_validInput,#0x01
-;	ecen4330lab7.c:2408: parity = 1;
-	mov	_parity,#0x01
-;	ecen4330lab7.c:2409: dataEnd = 1;
-	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2410: LCD_string_write("2\n");
-	mov	dptr,#___str_64
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2411: break;
-;	ecen4330lab7.c:2412: case '3':
-	sjmp	00111$
-00107$:
-;	ecen4330lab7.c:2413: validInput = 1;
-	mov	_validInput,#0x01
-;	ecen4330lab7.c:2414: parity = 2;
-	mov	_parity,#0x02
-;	ecen4330lab7.c:2415: dataEnd = 1;
-	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2416: LCD_string_write("3\n");
+;	ecen4330lab7.c:2438: LCD_string_write("1\n");
 	mov	dptr,#___str_65
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2417: break;
-;	ecen4330lab7.c:2418: default:
+;	ecen4330lab7.c:2439: break;
+;	ecen4330lab7.c:2440: case '2':
 	sjmp	00111$
-00108$:
-;	ecen4330lab7.c:2419: validInput = 0;
-	mov	_validInput,#0x00
-;	ecen4330lab7.c:2420: LCD_string_write("X\n");
-	mov	dptr,#___str_68
+00106$:
+;	ecen4330lab7.c:2441: validInput = 1;
+	mov	_validInput,#0x01
+;	ecen4330lab7.c:2442: parity = 1;
+	mov	_parity,#0x01
+;	ecen4330lab7.c:2443: dataEnd = 1;
+	mov	_dataEnd,#0x01
+;	ecen4330lab7.c:2444: LCD_string_write("2\n");
+	mov	dptr,#___str_66
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2421: invalidInput();
+;	ecen4330lab7.c:2445: break;
+;	ecen4330lab7.c:2446: case '3':
+	sjmp	00111$
+00107$:
+;	ecen4330lab7.c:2447: validInput = 1;
+	mov	_validInput,#0x01
+;	ecen4330lab7.c:2448: parity = 2;
+	mov	_parity,#0x02
+;	ecen4330lab7.c:2449: dataEnd = 1;
+	mov	_dataEnd,#0x01
+;	ecen4330lab7.c:2450: LCD_string_write("3\n");
+	mov	dptr,#___str_67
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2451: break;
+;	ecen4330lab7.c:2452: default:
+	sjmp	00111$
+00108$:
+;	ecen4330lab7.c:2453: validInput = 0;
+	mov	_validInput,#0x00
+;	ecen4330lab7.c:2454: LCD_string_write("X\n");
+	mov	dptr,#___str_70
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2455: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:2422: dataEnd = 0;
+;	ecen4330lab7.c:2456: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2424: }
+;	ecen4330lab7.c:2458: }
 00111$:
-;	ecen4330lab7.c:2425: } while(!dataEnd);
+;	ecen4330lab7.c:2459: } while(!dataEnd);
 	mov	a,_dataEnd
 	jnz	00153$
 	ljmp	00110$
 00153$:
-;	ecen4330lab7.c:2426: delay(200);
+;	ecen4330lab7.c:2460: delay(200);
 	mov	dptr,#0x00c8
-;	ecen4330lab7.c:2427: }
+;	ecen4330lab7.c:2461: }
 	ljmp	_delay
+;------------------------------------------------------------
+;Allocation info for local variables in function 'UART_parity_count'
+;------------------------------------------------------------
+;count_byte                Allocated to registers r7 
+;count                     Allocated to registers r6 
+;i                         Allocated to registers r4 r5 
+;------------------------------------------------------------
+;	ecen4330lab7.c:2464: unsigned char UART_parity_count(unsigned char count_byte) {
+;	-----------------------------------------
+;	 function UART_parity_count
+;	-----------------------------------------
+_UART_parity_count:
+	mov	r7,dpl
+;	ecen4330lab7.c:2467: for(int i = 0; i < 8; i++) {
+	mov	r6,#0x00
+	mov	r4,#0x00
+	mov	r5,#0x00
+00105$:
+	clr	c
+	mov	a,r4
+	subb	a,#0x08
+	mov	a,r5
+	xrl	a,#0x80
+	subb	a,#0x80
+	jnc	00103$
+;	ecen4330lab7.c:2468: if((count_byte >> i) & 0x01 == 0x01) {
+	mov	b,r4
+	inc	b
+	mov	a,r7
+	sjmp	00124$
+00123$:
+	clr	c
+	rrc	a
+00124$:
+	djnz	b,00123$
+	jnb	acc.0,00106$
+;	ecen4330lab7.c:2469: count++;
+	inc	r6
+00106$:
+;	ecen4330lab7.c:2467: for(int i = 0; i < 8; i++) {
+	inc	r4
+	cjne	r4,#0x00,00105$
+	inc	r5
+	sjmp	00105$
+00103$:
+;	ecen4330lab7.c:2472: return count;
+	mov	dpl,r6
+;	ecen4330lab7.c:2473: }
+	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'UART_send'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2435: void UART_send() {
+;	ecen4330lab7.c:2481: void UART_send() {
 ;	-----------------------------------------
 ;	 function UART_send
 ;	-----------------------------------------
 _UART_send:
-;	ecen4330lab7.c:2436: resetLCD();
+;	ecen4330lab7.c:2482: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2439: LCD_string_write("\nEnter\ncharacter\nto send:\n\n   _");
-	mov	dptr,#___str_82
+;	ecen4330lab7.c:2485: LCD_string_write("\nEnter\ncharacter\nto send:\n\n   _");
+	mov	dptr,#___str_83
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2442: cursor_x -= 1 * textsize * 6;
+;	ecen4330lab7.c:2488: cursor_x -= 1 * textsize * 6;
 	mov	a,_textsize
 	mov	b,#0x06
 	mul	ab
@@ -7493,57 +7655,119 @@ _UART_send:
 	mov	a,(_cursor_x + 1)
 	subb	a,r7
 	mov	(_cursor_x + 1),a
-;	ecen4330lab7.c:2445: key = keyDetect();
+;	ecen4330lab7.c:2491: key = keyDetect();
 	lcall	_keyDetect
-;	ecen4330lab7.c:2446: write(key);
+;	ecen4330lab7.c:2492: write(key);
 	mov  _key,dpl
 	lcall	_write
-;	ecen4330lab7.c:2447: SBUF = key;
+;	ecen4330lab7.c:2494: data = UART_parity_count(key);
+	mov	dpl,_key
+	lcall	_UART_parity_count
+	mov	_data,dpl
+;	ecen4330lab7.c:2496: dataBits = SCON & 0xC0;
+	mov	a,_SCON
+	anl	a,#0xc0
+	mov	_dataBits,a
+;	ecen4330lab7.c:2497: switch(dataBits) {
+	mov	a,#0x40
+	cjne	a,_dataBits,00142$
+	sjmp	00101$
+00142$:
+	mov	a,#0xc0
+;	ecen4330lab7.c:2499: case 0x40:
+	cjne	a,_dataBits,00111$
+	sjmp	00110$
+00101$:
+;	ecen4330lab7.c:2500: switch(parity) {
+	clr	a
+	cjne	a,_parity,00144$
+	sjmp	00102$
+00144$:
+	mov	a,#0x01
+	cjne	a,_parity,00145$
+	sjmp	00105$
+00145$:
+	mov	a,#0x02
+;	ecen4330lab7.c:2502: case 0:
+	cjne	a,_parity,00111$
+	sjmp	00108$
+00102$:
+;	ecen4330lab7.c:2504: if(data % 2 != 0) {
+	mov	a,_data
+	jnb	acc.0,00111$
+;	ecen4330lab7.c:2506: key |= 0x80;
+	orl	_key,#0x80
+;	ecen4330lab7.c:2508: break;
+;	ecen4330lab7.c:2510: case 1:
+	sjmp	00111$
+00105$:
+;	ecen4330lab7.c:2512: if(data % 2 == 0) {
+	mov	a,_data
+	jb	acc.0,00111$
+;	ecen4330lab7.c:2514: key |= 0x80;
+	orl	_key,#0x80
+;	ecen4330lab7.c:2516: break;
+;	ecen4330lab7.c:2518: case 2:
+	sjmp	00111$
+00108$:
+;	ecen4330lab7.c:2519: key &= 0x7F;
+	anl	_key,#0x7f
+;	ecen4330lab7.c:2522: break;
+;	ecen4330lab7.c:2524: case 0xC0:
+	sjmp	00111$
+00110$:
+;	ecen4330lab7.c:2525: LCD_string_write("9\n");
+	mov	dptr,#___str_2
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2527: }
+00111$:
+;	ecen4330lab7.c:2533: SBUF = key;
 	mov	_SBUF,_key
-;	ecen4330lab7.c:2448: UART_transmit();
+;	ecen4330lab7.c:2534: UART_transmit();
 	lcall	_UART_transmit
-;	ecen4330lab7.c:2449: delay(200);
+;	ecen4330lab7.c:2535: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:2450: resetLCD();
-;	ecen4330lab7.c:2451: }
+;	ecen4330lab7.c:2536: resetLCD();
+;	ecen4330lab7.c:2537: }
 	ljmp	_resetLCD
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'UART'
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2465: void UART(){
+;	ecen4330lab7.c:2551: void UART(){
 ;	-----------------------------------------
 ;	 function UART
 ;	-----------------------------------------
 _UART:
-;	ecen4330lab7.c:2468: do{
+;	ecen4330lab7.c:2554: do{
 00108$:
-;	ecen4330lab7.c:2469: resetLCD();
+;	ecen4330lab7.c:2555: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2470: LCD_string_write("\n(1) Data Rate");
-	mov	dptr,#___str_83
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2471: LCD_string_write("\n(2) # of Data\n    Bits");
+;	ecen4330lab7.c:2556: LCD_string_write("\n(1) Data Rate");
 	mov	dptr,#___str_84
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2472: LCD_string_write("\n(3) Parity");
+;	ecen4330lab7.c:2557: LCD_string_write("\n(2) # of Data\n    Bits");
 	mov	dptr,#___str_85
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2473: LCD_string_write("\n(4) Send Data");
+;	ecen4330lab7.c:2558: LCD_string_write("\n(3) Parity");
 	mov	dptr,#___str_86
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2474: LCD_string_write("\n(E) End\n");
+;	ecen4330lab7.c:2559: LCD_string_write("\n(4) Send Data");
 	mov	dptr,#___str_87
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2477: key = keyDetect();
+;	ecen4330lab7.c:2560: LCD_string_write("\n(E) End\n");
+	mov	dptr,#___str_88
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2563: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:2478: switch (key){
+;	ecen4330lab7.c:2564: switch (key){
 	mov	a,#0x31
 	cjne	a,_key,00137$
 	sjmp	00101$
@@ -7561,75 +7785,75 @@ _UART:
 	sjmp	00104$
 00140$:
 	mov	a,#0x45
-;	ecen4330lab7.c:2481: case '1':
+;	ecen4330lab7.c:2567: case '1':
 	cjne	a,_key,00106$
 	sjmp	00105$
 00101$:
-;	ecen4330lab7.c:2482: UART_dataRate();
+;	ecen4330lab7.c:2568: UART_dataRate();
 	lcall	_UART_dataRate
-;	ecen4330lab7.c:2483: dataEnd = 0;
+;	ecen4330lab7.c:2569: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2484: break;
-;	ecen4330lab7.c:2487: case '2':
+;	ecen4330lab7.c:2570: break;
+;	ecen4330lab7.c:2573: case '2':
 	sjmp	00109$
 00102$:
-;	ecen4330lab7.c:2488: UART_dataBits();
+;	ecen4330lab7.c:2574: UART_dataBits();
 	lcall	_UART_dataBits
-;	ecen4330lab7.c:2489: dataEnd = 0;
+;	ecen4330lab7.c:2575: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2490: break;
-;	ecen4330lab7.c:2493: case '3':
+;	ecen4330lab7.c:2576: break;
+;	ecen4330lab7.c:2579: case '3':
 	sjmp	00109$
 00103$:
-;	ecen4330lab7.c:2494: UART_parity();
+;	ecen4330lab7.c:2580: UART_parity();
 	lcall	_UART_parity
-;	ecen4330lab7.c:2495: dataEnd = 0;
+;	ecen4330lab7.c:2581: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2496: break;
-;	ecen4330lab7.c:2499: case '4':
+;	ecen4330lab7.c:2582: break;
+;	ecen4330lab7.c:2585: case '4':
 	sjmp	00109$
 00104$:
-;	ecen4330lab7.c:2500: UART_send();
+;	ecen4330lab7.c:2586: UART_send();
 	lcall	_UART_send
-;	ecen4330lab7.c:2501: dataEnd = 0;
+;	ecen4330lab7.c:2587: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2502: break;
-;	ecen4330lab7.c:2505: case 'E':
+;	ecen4330lab7.c:2588: break;
+;	ecen4330lab7.c:2591: case 'E':
 	sjmp	00109$
 00105$:
-;	ecen4330lab7.c:2506: resetLCD1();
+;	ecen4330lab7.c:2592: resetLCD1();
 	lcall	_resetLCD1
-;	ecen4330lab7.c:2507: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:2593: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:2508: LCD_string_write("\nReturning to\nmain menu.");
-	mov	dptr,#___str_44
+;	ecen4330lab7.c:2594: LCD_string_write("\nReturning to\nmain menu.");
+	mov	dptr,#___str_46
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2509: delay(200);
+;	ecen4330lab7.c:2595: delay(200);
 	mov	dptr,#0x00c8
 	lcall	_delay
-;	ecen4330lab7.c:2510: dataEnd = 1;
+;	ecen4330lab7.c:2596: dataEnd = 1;
 	mov	_dataEnd,#0x01
-;	ecen4330lab7.c:2511: break;
-;	ecen4330lab7.c:2514: default:
+;	ecen4330lab7.c:2597: break;
+;	ecen4330lab7.c:2600: default:
 	sjmp	00109$
 00106$:
-;	ecen4330lab7.c:2515: invalidInput();
+;	ecen4330lab7.c:2601: invalidInput();
 	lcall	_invalidInput
-;	ecen4330lab7.c:2516: dataEnd = 0;
+;	ecen4330lab7.c:2602: dataEnd = 0;
 	mov	_dataEnd,#0x00
-;	ecen4330lab7.c:2518: }
+;	ecen4330lab7.c:2604: }
 00109$:
-;	ecen4330lab7.c:2519: } while(dataEnd == 0);
+;	ecen4330lab7.c:2605: } while(dataEnd == 0);
 	mov	a,_dataEnd
 	jnz	00142$
 	ljmp	00108$
 00142$:
-;	ecen4330lab7.c:2520: }
+;	ecen4330lab7.c:2606: }
 	ret
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'LCD_mainMenu'
@@ -7671,99 +7895,99 @@ _UART:
 ;map_address               Allocated to registers 
 ;d                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2544: void LCD_mainMenu() {
+;	ecen4330lab7.c:2630: void LCD_mainMenu() {
 ;	-----------------------------------------
 ;	 function LCD_mainMenu
 ;	-----------------------------------------
 _LCD_mainMenu:
-;	ecen4330lab7.c:2546: key = 0;
+;	ecen4330lab7.c:2632: key = 0;
 	mov	_key,#0x00
-;	ecen4330lab7.c:2547: iowrite8(seg7_address, 0xC0);
+;	ecen4330lab7.c:2633: iowrite8(seg7_address, 0xC0);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xc0
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2550: resetLCD();
+;	ecen4330lab7.c:2636: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2551: setTextColor(GREEN, BLACK);
+;	ecen4330lab7.c:2637: setTextColor(GREEN, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0x07e0
 	lcall	_setTextColor
-;	ecen4330lab7.c:2552: LCD_string_write("   Cameron\n   Biniamow\n");
-	mov	dptr,#___str_88
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2553: LCD_string_write("  ECEN-4330\n\n");
+;	ecen4330lab7.c:2638: LCD_string_write("   Cameron\n   Biniamow\n");
 	mov	dptr,#___str_89
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2556: setTextColor(WHITE, BLACK);
-	clr	a
-	mov	_setTextColor_PARM_2,a
-	mov	(_setTextColor_PARM_2 + 1),a
-	mov	dptr,#0xffff
-	lcall	_setTextColor
-;	ecen4330lab7.c:2557: LCD_string_write("(A) RAM CHECK\n");
+;	ecen4330lab7.c:2639: LCD_string_write("  ECEN-4330\n\n");
 	mov	dptr,#___str_90
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2558: LCD_string_write("(B) MOVE\n");
-	mov	dptr,#___str_91
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2559: LCD_string_write("(C) COUNT\n");
-	mov	dptr,#___str_92
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2560: LCD_string_write("(D) DUMP\n");
-	mov	dptr,#___str_93
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2561: LCD_string_write("(E) EDIT\n");
-	mov	dptr,#___str_94
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2562: LCD_string_write("(F) FIND\n");
-	mov	dptr,#___str_95
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2564: LCD_string_write("(1) UART\n");
-	mov	dptr,#___str_96
-	mov	b,#0x80
-	lcall	_LCD_string_write
-;	ecen4330lab7.c:2565: setTextColor(WHITE, BLACK);
+;	ecen4330lab7.c:2642: setTextColor(WHITE, BLACK);
 	clr	a
 	mov	_setTextColor_PARM_2,a
 	mov	(_setTextColor_PARM_2 + 1),a
 	mov	dptr,#0xffff
 	lcall	_setTextColor
-;	ecen4330lab7.c:2566: setTextSize(1);
+;	ecen4330lab7.c:2643: LCD_string_write("(A) RAM CHECK\n");
+	mov	dptr,#___str_91
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2644: LCD_string_write("(B) MOVE\n");
+	mov	dptr,#___str_92
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2645: LCD_string_write("(C) COUNT\n");
+	mov	dptr,#___str_93
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2646: LCD_string_write("(D) DUMP\n");
+	mov	dptr,#___str_94
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2647: LCD_string_write("(E) EDIT\n");
+	mov	dptr,#___str_95
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2648: LCD_string_write("(F) FIND\n");
+	mov	dptr,#___str_96
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2650: LCD_string_write("(1) UART\n");
+	mov	dptr,#___str_97
+	mov	b,#0x80
+	lcall	_LCD_string_write
+;	ecen4330lab7.c:2651: setTextColor(WHITE, BLACK);
+	clr	a
+	mov	_setTextColor_PARM_2,a
+	mov	(_setTextColor_PARM_2 + 1),a
+	mov	dptr,#0xffff
+	lcall	_setTextColor
+;	ecen4330lab7.c:2652: setTextSize(1);
 	mov	dpl,#0x01
 	lcall	_setTextSize
-;	ecen4330lab7.c:2567: setCursor(3, 304);
+;	ecen4330lab7.c:2653: setCursor(3, 304);
 	mov	_setCursor_PARM_2,#0x30
 	mov	(_setCursor_PARM_2 + 1),#0x01
 	mov	dptr,#0x0003
 	lcall	_setCursor
-;	ecen4330lab7.c:2568: LCD_string_write("Spring 2021");
-	mov	dptr,#___str_97
+;	ecen4330lab7.c:2654: LCD_string_write("Spring 2021");
+	mov	dptr,#___str_98
 	mov	b,#0x80
 	lcall	_LCD_string_write
-;	ecen4330lab7.c:2569: rtcPrint();
+;	ecen4330lab7.c:2655: rtcPrint();
 	lcall	_rtcPrint
-;	ecen4330lab7.c:2572: key = keyDetect();
+;	ecen4330lab7.c:2658: key = keyDetect();
 	lcall	_keyDetect
 	mov	_key,dpl
-;	ecen4330lab7.c:2573: switch (key)
+;	ecen4330lab7.c:2659: switch (key)
 	mov	a,#0x31
 	cjne	a,_key,00149$
 	ljmp	00107$
@@ -7793,142 +8017,142 @@ _LCD_mainMenu:
 	sjmp	00106$
 00155$:
 	ljmp	00108$
-;	ecen4330lab7.c:2575: case 'A':
+;	ecen4330lab7.c:2661: case 'A':
 00101$:
-;	ecen4330lab7.c:2576: iowrite8(seg7_address, 0x88);
+;	ecen4330lab7.c:2662: iowrite8(seg7_address, 0x88);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0x88
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2577: RAM_CHECK();
-;	ecen4330lab7.c:2578: break;
+;	ecen4330lab7.c:2663: RAM_CHECK();
+;	ecen4330lab7.c:2664: break;
 	ljmp	_RAM_CHECK
-;	ecen4330lab7.c:2579: case 'B':
+;	ecen4330lab7.c:2665: case 'B':
 00102$:
-;	ecen4330lab7.c:2580: iowrite8(seg7_address, 0x83);
+;	ecen4330lab7.c:2666: iowrite8(seg7_address, 0x83);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0x83
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2581: MOVE();
-;	ecen4330lab7.c:2582: break;
-;	ecen4330lab7.c:2583: case 'C':
+;	ecen4330lab7.c:2667: MOVE();
+;	ecen4330lab7.c:2668: break;
+;	ecen4330lab7.c:2669: case 'C':
 	ljmp	_MOVE
 00103$:
-;	ecen4330lab7.c:2584: iowrite8(seg7_address, 0xC6);
+;	ecen4330lab7.c:2670: iowrite8(seg7_address, 0xC6);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xc6
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2585: COUNT();
-;	ecen4330lab7.c:2586: break;
-;	ecen4330lab7.c:2587: case 'D':
+;	ecen4330lab7.c:2671: COUNT();
+;	ecen4330lab7.c:2672: break;
+;	ecen4330lab7.c:2673: case 'D':
 	ljmp	_COUNT
 00104$:
-;	ecen4330lab7.c:2588: iowrite8(seg7_address, 0xA1);
+;	ecen4330lab7.c:2674: iowrite8(seg7_address, 0xA1);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xa1
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2589: DUMP();
-;	ecen4330lab7.c:2590: break;
-;	ecen4330lab7.c:2591: case 'E':
+;	ecen4330lab7.c:2675: DUMP();
+;	ecen4330lab7.c:2676: break;
+;	ecen4330lab7.c:2677: case 'E':
 	ljmp	_DUMP
 00105$:
-;	ecen4330lab7.c:2592: iowrite8(seg7_address, 0x86);
+;	ecen4330lab7.c:2678: iowrite8(seg7_address, 0x86);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0x86
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2593: EDIT();
-;	ecen4330lab7.c:2594: break;
-;	ecen4330lab7.c:2595: case 'F':
+;	ecen4330lab7.c:2679: EDIT();
+;	ecen4330lab7.c:2680: break;
+;	ecen4330lab7.c:2681: case 'F':
 	ljmp	_EDIT
 00106$:
-;	ecen4330lab7.c:2596: iowrite8(seg7_address, 0x8E);
+;	ecen4330lab7.c:2682: iowrite8(seg7_address, 0x8E);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0x8e
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2597: FIND();
-;	ecen4330lab7.c:2598: break;
-;	ecen4330lab7.c:2599: case '1':
+;	ecen4330lab7.c:2683: FIND();
+;	ecen4330lab7.c:2684: break;
+;	ecen4330lab7.c:2685: case '1':
 	ljmp	_FIND
 00107$:
-;	ecen4330lab7.c:2600: iowrite8(seg7_address, 0xF9);
+;	ecen4330lab7.c:2686: iowrite8(seg7_address, 0xF9);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xf9
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2601: UART();
-;	ecen4330lab7.c:2602: break;
-;	ecen4330lab7.c:2608: default:
+;	ecen4330lab7.c:2687: UART();
+;	ecen4330lab7.c:2688: break;
+;	ecen4330lab7.c:2694: default:
 	ljmp	_UART
 00108$:
-;	ecen4330lab7.c:2609: iowrite8(seg7_address, 0xFF);
+;	ecen4330lab7.c:2695: iowrite8(seg7_address, 0xFF);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xff
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2610: invalidInput();
-;	ecen4330lab7.c:2612: }
-;	ecen4330lab7.c:2613: }
+;	ecen4330lab7.c:2696: invalidInput();
+;	ecen4330lab7.c:2698: }
+;	ecen4330lab7.c:2699: }
 	ljmp	_invalidInput
 ;------------------------------------------------------------
 ;Allocation info for local variables in function 'main'
@@ -7962,138 +8186,138 @@ _LCD_mainMenu:
 ;map_address               Allocated to registers 
 ;d                         Allocated to registers 
 ;------------------------------------------------------------
-;	ecen4330lab7.c:2622: void main (void) {
+;	ecen4330lab7.c:2708: void main (void) {
 ;	-----------------------------------------
 ;	 function main
 ;	-----------------------------------------
 _main:
-;	ecen4330lab7.c:2623: CD = 0;
+;	ecen4330lab7.c:2709: CD = 0;
 ;	assignBit
 	clr	_P3_5
-;	ecen4330lab7.c:2624: IOM = 0;
+;	ecen4330lab7.c:2710: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2626: UART_Init();
+;	ecen4330lab7.c:2712: UART_Init();
 	lcall	_UART_Init
-;	ecen4330lab7.c:2627: rtcInit();
+;	ecen4330lab7.c:2713: rtcInit();
 	lcall	_rtcInit
-;	ecen4330lab7.c:2629: iowrite8(seg7_address, 0xFE);//a
+;	ecen4330lab7.c:2715: iowrite8(seg7_address, 0xFE);//a
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xfe
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2630: delay(100);
+;	ecen4330lab7.c:2716: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:2631: iowrite8(seg7_address, 0xFC);//a & b
+;	ecen4330lab7.c:2717: iowrite8(seg7_address, 0xFC);//a & b
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xfc
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2632: delay(100);
+;	ecen4330lab7.c:2718: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:2633: iowrite8(seg7_address, 0xF8);//a & b & c
+;	ecen4330lab7.c:2719: iowrite8(seg7_address, 0xF8);//a & b & c
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xf8
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2634: delay(100);
+;	ecen4330lab7.c:2720: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:2635: iowrite8(seg7_address, 0xF0);//a & b & c & d
+;	ecen4330lab7.c:2721: iowrite8(seg7_address, 0xF0);//a & b & c & d
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xf0
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2636: delay(100);
+;	ecen4330lab7.c:2722: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:2637: iowrite8(seg7_address, 0xE0);//a & b & c & d & e
+;	ecen4330lab7.c:2723: iowrite8(seg7_address, 0xE0);//a & b & c & d & e
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xe0
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2638: delay(100);
+;	ecen4330lab7.c:2724: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:2639: iowrite8(seg7_address, 0xC0);//a & b & c & d & e & f
+;	ecen4330lab7.c:2725: iowrite8(seg7_address, 0xC0);//a & b & c & d & e & f
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xc0
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2640: delay(100);
+;	ecen4330lab7.c:2726: delay(100);
 	mov	dptr,#0x0064
 	lcall	_delay
-;	ecen4330lab7.c:2641: IOM = 0;
+;	ecen4330lab7.c:2727: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2642: CD = 1;
+;	ecen4330lab7.c:2728: CD = 1;
 ;	assignBit
 	setb	_P3_5
-;	ecen4330lab7.c:2644: TFT_LCD_INIT();
+;	ecen4330lab7.c:2730: TFT_LCD_INIT();
 	lcall	_TFT_LCD_INIT
-;	ecen4330lab7.c:2645: iowrite8(seg7_address, 0xF9);
+;	ecen4330lab7.c:2731: iowrite8(seg7_address, 0xF9);
 	mov	dpl,_seg7_address
 	mov	dph,(_seg7_address + 1)
-;	ecen4330lab7.c:189: IOM = 1;
+;	ecen4330lab7.c:229: IOM = 1;
 ;	assignBit
 	setb	_P3_4
-;	ecen4330lab7.c:190: *map_address = d;
+;	ecen4330lab7.c:230: *map_address = d;
 	mov	a,#0xf9
 	movx	@dptr,a
-;	ecen4330lab7.c:191: IOM = 0;
+;	ecen4330lab7.c:231: IOM = 0;
 ;	assignBit
 	clr	_P3_4
-;	ecen4330lab7.c:2646: resetLCD();
+;	ecen4330lab7.c:2732: resetLCD();
 	lcall	_resetLCD
-;	ecen4330lab7.c:2648: while(1) {
+;	ecen4330lab7.c:2734: while(1) {
 00102$:
-;	ecen4330lab7.c:2649: LCD_mainMenu();
+;	ecen4330lab7.c:2735: LCD_mainMenu();
 	lcall	_LCD_mainMenu
-;	ecen4330lab7.c:2651: }
+;	ecen4330lab7.c:2737: }
 	sjmp	00102$
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
@@ -9392,6 +9616,13 @@ _keypad:
 	.db #0x44	; 68	'D'
 	.area CONST   (CODE)
 ___str_0:
+	.ascii "Parity"
+	.db 0x0a
+	.ascii "Error."
+	.db 0x00
+	.area CSEG    (CODE)
+	.area CONST   (CODE)
+___str_1:
 	.ascii "UART data"
 	.db 0x0a
 	.ascii "received."
@@ -9401,17 +9632,23 @@ ___str_0:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_1:
-	.ascii ":"
-	.db 0x00
-	.area CSEG    (CODE)
-	.area CONST   (CODE)
 ___str_2:
-	.ascii "0x"
+	.ascii "9"
+	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
 ___str_3:
+	.ascii ":"
+	.db 0x00
+	.area CSEG    (CODE)
+	.area CONST   (CODE)
+___str_4:
+	.ascii "0x"
+	.db 0x00
+	.area CSEG    (CODE)
+	.area CONST   (CODE)
+___str_5:
 	.db 0x0a
 	.ascii "   Invalid"
 	.db 0x0a
@@ -9419,12 +9656,12 @@ ___str_3:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_4:
+___str_6:
 	.ascii "    Input"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_5:
+___str_7:
 	.db 0x0a
 	.ascii "Select Data"
 	.db 0x0a
@@ -9434,19 +9671,19 @@ ___str_5:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_6:
+___str_8:
 	.ascii "(1) Byte"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_7:
+___str_9:
 	.ascii "(2) Word"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_8:
+___str_10:
 	.ascii "(3) Double"
 	.db 0x0a
 	.ascii "    Word"
@@ -9456,7 +9693,7 @@ ___str_8:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_9:
+___str_11:
 	.db 0x0a
 	.ascii "Enter Data"
 	.db 0x0a
@@ -9467,7 +9704,7 @@ ___str_9:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_10:
+___str_12:
 	.db 0x0a
 	.ascii "Writing 0x55"
 	.db 0x0a
@@ -9481,7 +9718,7 @@ ___str_10:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_11:
+___str_13:
 	.ascii "Write"
 	.db 0x0a
 	.ascii "complete."
@@ -9489,7 +9726,7 @@ ___str_11:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_12:
+___str_14:
 	.db 0x0a
 	.ascii "Verifying all"
 	.db 0x0a
@@ -9501,7 +9738,7 @@ ___str_12:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_13:
+___str_15:
 	.ascii "1st RAM check"
 	.db 0x0a
 	.ascii "unsuccessful."
@@ -9510,25 +9747,25 @@ ___str_13:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_14:
+___str_16:
 	.ascii "Error at:"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_15:
+___str_17:
 	.ascii ": 0x"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_16:
+___str_18:
 	.ascii "Returning to"
 	.db 0x0a
 	.ascii "main menu."
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_17:
+___str_19:
 	.ascii "1st RAM check"
 	.db 0x0a
 	.ascii "successful."
@@ -9537,7 +9774,7 @@ ___str_17:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_18:
+___str_20:
 	.db 0x0a
 	.ascii "Writing 0xAA"
 	.db 0x0a
@@ -9551,7 +9788,7 @@ ___str_18:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_19:
+___str_21:
 	.db 0x0a
 	.ascii "Verifying all"
 	.db 0x0a
@@ -9563,7 +9800,7 @@ ___str_19:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_20:
+___str_22:
 	.ascii "2nd RAM check"
 	.db 0x0a
 	.ascii "unsuccessful."
@@ -9572,7 +9809,7 @@ ___str_20:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_21:
+___str_23:
 	.ascii "2nd RAM check"
 	.db 0x0a
 	.ascii "successful."
@@ -9581,7 +9818,7 @@ ___str_21:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_22:
+___str_24:
 	.ascii "RAM check"
 	.db 0x0a
 	.ascii "complete."
@@ -9590,7 +9827,7 @@ ___str_22:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_23:
+___str_25:
 	.db 0x0a
 	.ascii "Enter source"
 	.db 0x0a
@@ -9604,7 +9841,7 @@ ___str_23:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_24:
+___str_26:
 	.db 0x0a
 	.ascii "Enter"
 	.db 0x0a
@@ -9620,7 +9857,7 @@ ___str_24:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_25:
+___str_27:
 	.db 0x0a
 	.ascii "Move complete."
 	.db 0x0a
@@ -9628,7 +9865,7 @@ ___str_25:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_26:
+___str_28:
 	.db 0x0a
 	.ascii "Enter"
 	.db 0x0a
@@ -9641,7 +9878,7 @@ ___str_26:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_27:
+___str_29:
 	.db 0x0a
 	.ascii "Enter search"
 	.db 0x0a
@@ -9652,30 +9889,30 @@ ___str_27:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_28:
+___str_30:
 	.db 0x0a
 	.ascii "0x"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_29:
+___str_31:
 	.ascii " found"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_30:
+___str_32:
 	.ascii "0x10000"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_31:
+___str_33:
 	.db 0x0a
 	.ascii "times."
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_32:
+___str_34:
 	.ascii " not"
 	.db 0x0a
 	.ascii "found in"
@@ -9685,18 +9922,18 @@ ___str_32:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_33:
+___str_35:
 	.ascii " -"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_34:
+___str_36:
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_35:
+___str_37:
 	.ascii "  (0) - Next Page"
 	.db 0x0a
 	.ascii "  (1) - Prev Page"
@@ -9706,18 +9943,18 @@ ___str_35:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_36:
+___str_38:
 	.db 0x0a
 	.ascii "End of Data."
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_37:
+___str_39:
 	.ascii "End of Data"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_38:
+___str_40:
 	.db 0x0a
 	.ascii "Returning to"
 	.db 0x0a
@@ -9725,7 +9962,7 @@ ___str_38:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_39:
+___str_41:
 	.db 0x0a
 	.ascii "Enter source"
 	.db 0x0a
@@ -9738,7 +9975,7 @@ ___str_39:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_40:
+___str_42:
 	.db 0x0a
 	.db 0x0a
 	.ascii "New value:"
@@ -9747,7 +9984,7 @@ ___str_40:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_41:
+___str_43:
 	.db 0x0a
 	.db 0x0a
 	.db 0x0a
@@ -9760,19 +9997,19 @@ ___str_41:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_42:
+___str_44:
 	.ascii "(E) End"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_43:
+___str_45:
 	.db 0x0a
 	.ascii "End of data."
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_44:
+___str_46:
 	.db 0x0a
 	.ascii "Returning to"
 	.db 0x0a
@@ -9780,7 +10017,7 @@ ___str_44:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_45:
+___str_47:
 	.ascii " not"
 	.db 0x0a
 	.ascii "found in"
@@ -9791,7 +10028,7 @@ ___str_45:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_46:
+___str_48:
 	.ascii " found at"
 	.db 0x0a
 	.ascii "the following"
@@ -9802,12 +10039,12 @@ ___str_46:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_47:
+___str_49:
 	.ascii "End of Data."
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_48:
+___str_50:
 	.db 0x0a
 	.ascii "Enter"
 	.db 0x0a
@@ -9820,7 +10057,7 @@ ___str_48:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_49:
+___str_51:
 	.db 0x0a
 	.ascii "Enter search"
 	.db 0x0a
@@ -9831,123 +10068,123 @@ ___str_49:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_50:
+___str_52:
 	.db 0x0a
 	.ascii "(1) 1200"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_51:
+___str_53:
 	.ascii "(2) 2400"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_52:
+___str_54:
 	.ascii "(3) 4800"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_53:
+___str_55:
 	.ascii "(4) 9600"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_54:
+___str_56:
 	.ascii "(5) 19200"
 	.db 0x0a
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_55:
+___str_57:
 	.ascii "Current:"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_56:
+___str_58:
 	.ascii "19200"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_57:
+___str_59:
 	.ascii "Invalid"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_58:
+___str_60:
 	.ascii "1200"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_59:
+___str_61:
 	.ascii "2400"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_60:
+___str_62:
 	.ascii "4800"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_61:
+___str_63:
 	.ascii "9600"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_62:
+___str_64:
 	.db 0x0a
 	.ascii "   _"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_63:
+___str_65:
 	.ascii "1"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_64:
+___str_66:
 	.ascii "2"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_65:
+___str_67:
 	.ascii "3"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_66:
+___str_68:
 	.ascii "4"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_67:
+___str_69:
 	.ascii "5"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_68:
+___str_70:
 	.ascii "X"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_69:
+___str_71:
 	.db 0x0a
 	.ascii "Data Bits"
 	.db 0x0a
@@ -9955,37 +10192,31 @@ ___str_69:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_70:
+___str_72:
 	.ascii "(1) 8"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_71:
+___str_73:
 	.ascii "(2) 9"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_72:
+___str_74:
 	.db 0x0a
 	.ascii "Current: "
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_73:
+___str_75:
 	.ascii "8"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_74:
-	.ascii "9"
-	.db 0x0a
-	.db 0x00
-	.area CSEG    (CODE)
-	.area CONST   (CODE)
-___str_75:
+___str_76:
 	.db 0x0a
 	.ascii "Parity"
 	.db 0x0a
@@ -9993,43 +10224,43 @@ ___str_75:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_76:
+___str_77:
 	.ascii "(1) Even"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_77:
+___str_78:
 	.ascii "(2) Odd"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_78:
+___str_79:
 	.ascii "(3) None"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_79:
+___str_80:
 	.ascii "Even"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_80:
+___str_81:
 	.ascii "Odd"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_81:
+___str_82:
 	.ascii "None"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_82:
+___str_83:
 	.db 0x0a
 	.ascii "Enter"
 	.db 0x0a
@@ -10042,13 +10273,13 @@ ___str_82:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_83:
+___str_84:
 	.db 0x0a
 	.ascii "(1) Data Rate"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_84:
+___str_85:
 	.db 0x0a
 	.ascii "(2) # of Data"
 	.db 0x0a
@@ -10056,26 +10287,26 @@ ___str_84:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_85:
+___str_86:
 	.db 0x0a
 	.ascii "(3) Parity"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_86:
+___str_87:
 	.db 0x0a
 	.ascii "(4) Send Data"
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_87:
+___str_88:
 	.db 0x0a
 	.ascii "(E) End"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_88:
+___str_89:
 	.ascii "   Cameron"
 	.db 0x0a
 	.ascii "   Biniamow"
@@ -10083,56 +10314,56 @@ ___str_88:
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_89:
+___str_90:
 	.ascii "  ECEN-4330"
 	.db 0x0a
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_90:
+___str_91:
 	.ascii "(A) RAM CHECK"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_91:
+___str_92:
 	.ascii "(B) MOVE"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_92:
+___str_93:
 	.ascii "(C) COUNT"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_93:
+___str_94:
 	.ascii "(D) DUMP"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_94:
+___str_95:
 	.ascii "(E) EDIT"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_95:
+___str_96:
 	.ascii "(F) FIND"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_96:
+___str_97:
 	.ascii "(1) UART"
 	.db 0x0a
 	.db 0x00
 	.area CSEG    (CODE)
 	.area CONST   (CODE)
-___str_97:
+___str_98:
 	.ascii "Spring 2021"
 	.db 0x00
 	.area CSEG    (CODE)

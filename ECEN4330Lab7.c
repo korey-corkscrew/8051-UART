@@ -31,9 +31,9 @@
 
 // keypad configuration
 __code unsigned char keypad[4][4] =    {{'1','4','7','E'},
-                {'2','5','8','0'},
-                {'3','6','9','F'},
-                {'A','B','C','D'} };
+                                        {'2','5','8','0'},
+                                        {'3','6','9','F'},
+                                        {'A','B','C','D'} };
 unsigned char colloc, rowloc;
 // store it in a variable the lcd address
 __xdata unsigned char* lcd_address = (unsigned char __xdata*) __LCD_ADDRESS__;
@@ -41,10 +41,10 @@ __xdata unsigned char* seg7_address = (unsigned char __xdata*) __SEG_7_ADDRESS__
 
 __xdata unsigned char* read_ram_address;
 
- # define write8inline(d) {         \
-    IOM = 1;                            \
-    *lcd_address = d;                       \
-    IOM = 0;                            \
+ # define write8inline(d) {     \
+    IOM = 1;                    \
+    *lcd_address = d;           \
+    IOM = 0;                    \
 }
 
 # define write8 write8inline
@@ -67,23 +67,15 @@ __xdata unsigned char* read_ram_address;
 # define RAMcheckVal2 0xAA 
 
 
-u16 cursor_x, cursor_y;  /// cursor_y and cursor_x globals
-u8 textsize, rotation; /// textsize and rotation
+u16 cursor_x, cursor_y;     /// cursor_y and cursor_x globals
+u8 textsize, rotation;      /// textsize and rotation
 u16
-    textcolor,      ////< 16-bit background color for print()
-    textbgcolor;    ////< 16-bit text color for print()
+    textcolor,              ////< 16-bit background color for print()
+    textbgcolor;            ////< 16-bit text color for print()
 u16
-    _width,         ////< Display width as modified by current rotation
-    _height;        ////< Display height as modified by current rotation
+    _width,                 ////< Display width as modified by current rotation
+    _height;                ////< Display height as modified by current rotation
     
-
-
-
-
-
-
-
-
 
 // Global variables used for memory conservation 
 // Keeping these variables in internal RAM to preserve data integrity of external RAM functions
@@ -104,7 +96,7 @@ unsigned int count = 0;
 unsigned long endAddrCalc;
 unsigned char xCursorHold, yCursorHold, textSizeHold;
 unsigned char x, y, ts;
-unsigned char dataRate = 3;
+unsigned char dataRate = 0;
 unsigned char dataBits = 0;
 unsigned char parity = 2;
 
@@ -116,6 +108,8 @@ void FIND_display();
 void write(u8 c);
 void resetLCD();
 void LCD_mainMenu();
+void UART_parity();
+unsigned char UART_parity_count(unsigned char count_byte);
 
 /**********************************************************************
  XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -140,9 +134,55 @@ void ISR_receive() __interrupt (4) {
         RI = 0;
         received_flag = 1;
         resetLCD();
-        LCD_string_write("UART data\nreceived.\n\n >> ");
-        write(received_byte);
-        delay(500);
+        //LCD_string_write("UART data\nreceived.\n\n >> ");
+        //write(received_byte);
+        //delay(500);
+        
+        data = UART_parity_count(received_byte);
+        dataBits = SCON & 0xC0;
+        switch(dataBits) {
+            // 8-bits
+            case 0x40:
+                switch(parity) {
+                    // Even
+                    case 0:
+                        // Currently odd
+                        if(data % 2 != 0) {
+                            LCD_string_write("Parity\nError.");
+                        }
+                        else{
+                            received_byte &= 0x7F;  // Clear parity bit
+                            LCD_string_write("UART data\nreceived.\n\n >> ");
+                            write(received_byte);
+                            delay(500);
+                        }
+                        break;
+                    // Odd
+                    case 1:
+                        // Currently even
+                        if(data % 2 == 0) {
+                            LCD_string_write("Parity\nError.");
+                        }
+                        else{
+                            received_byte &= 0x7F;  // Clear parity bit
+                            LCD_string_write("UART data\nreceived.\n\n >> ");
+                            write(received_byte);
+                            delay(500);
+                        }
+                        break;
+                    // None
+                    case 2:
+                        received_byte &= 0x7F;  // Clear parity bit
+                        LCD_string_write("UART data\nreceived.\n\n >> ");
+                        write(received_byte);
+                        delay(500);
+                }
+                break;
+            // 9-bits
+            case 0xC0:
+                LCD_string_write("9\n");
+                break;
+        }
     }
     else {
         TI = 0;
@@ -157,7 +197,7 @@ void ISR_receive() __interrupt (4) {
  *********************************************************************/
 void UART_Init(){
     SCON = 0x50;  // Asynchronous mode, 8-bit data and 1-stop bit
-    //PCON = 0x00;
+    PCON &= 0x7F; // 
     TMOD = 0x20;  // Timer1 in Mode2. in 8 bit auto reload
     TH1 =  0xFD;  // Load timer value for 9600 baudrate
     TR1 = 1;      // Turn ON the timer for Baud rate generation
@@ -2242,8 +2282,9 @@ void UART_dataRate() {
         LCD_string_write("(5) 19200\n\n");
         LCD_string_write("Current:\n");
 
-        // TODO: 19200 baud does not work.
-        if(PCON == 0x80){
+        dataRate = PCON & 0x80;
+
+        if(dataRate == 0x80){
             if (TH1 == 0xFD){
                 LCD_string_write("19200\n");
             }
@@ -2267,6 +2308,7 @@ void UART_dataRate() {
                     break;
             }
         }
+        
         LCD_string_write("\n   _");
         cursor_x -= 1 * textsize * 6;
         key = keyDetect();
@@ -2274,36 +2316,36 @@ void UART_dataRate() {
 
             case '1':
                 validInput = 1;
-                TH1 = 0xE8;
-                PCON = 0x00;
+                TH1 = 0xE8;                 // 1200 baud
+                PCON &= 0x7F;               // SMOD = 0
                 dataEnd = 1;
                 LCD_string_write("1\n");
                 break;
             case '2':
                 validInput = 1;
                 TH1 = 0xF4;
-                PCON = 0x00;
+                PCON &= 0x7F;               // SMOD = 0
                 dataEnd = 1;
                 LCD_string_write("2\n");
                 break;
             case '3':
                 validInput = 1;
                 TH1 = 0xFA;
-                PCON = 0x00;
+                PCON &= 0x7F;               // SMOD = 0
                 dataEnd = 1;
                 LCD_string_write("3\n");
                 break;
             case '4':
                 validInput = 1;
                 TH1 = 0xFD;
-                PCON = 0x00;
+                PCON &= 0x7F;               // SMOD = 0
                 dataEnd = 1;
                 LCD_string_write("4\n");
                 break;
             case '5':
                 validInput = 1;
                 TH1 = 0xFD;
-                PCON = 0x80;
+                PCON |= 0x80;               // SMOD = 1
                 dataEnd = 1;
                 LCD_string_write("5\n");
                 break;
@@ -2342,7 +2384,6 @@ void UART_dataBits() {
             case '1':
                 validInput = 1;
                 SCON = SCON & 0x7F;
-                pairty = 2; // None
                 dataEnd = 1;
                 LCD_string_write("1\n");
                 break;
@@ -2420,6 +2461,18 @@ void UART_parity() {
 }
 
 
+unsigned char UART_parity_count(unsigned char count_byte) {
+    unsigned char count = 0;
+
+    for(int i = 0; i < 8; i++) {
+        if((count_byte >> i) & 0x01 == 0x01) {
+            count++;
+        }
+    }
+    return count;
+}
+
+
 /**********************************************************************
  * * UART_send
  * 
@@ -2437,6 +2490,46 @@ void UART_send() {
     // Read user input & write on LCD
     key = keyDetect();
     write(key);
+
+    data = UART_parity_count(key);
+
+    dataBits = SCON & 0xC0;
+    switch(dataBits) {
+        // 8-bits
+        case 0x40:
+            switch(parity) {
+                // Even
+                case 0:
+                    // Currently odd
+                    if(data % 2 != 0) {
+                        // Set MSB high to make even
+                        key |= 0x80;
+                    }
+                    break;
+                // Odd
+                case 1:
+                    // Currently even
+                    if(data % 2 == 0) {
+                        // Set MSB high to make odd
+                        key |= 0x80;
+                    }
+                    break;
+                // None
+                case 2:
+                    key &= 0x7F;
+                    break;
+            }
+            break;
+        // 9-bits
+        case 0xC0:
+            LCD_string_write("9\n");
+            break;
+    }
+    //HEXtoASCII_8write(key);
+    //write(key);
+    //LCD_string_write("\n\n");
+    //delay(100);
+
     SBUF = key;
     UART_transmit();
     delay(200);

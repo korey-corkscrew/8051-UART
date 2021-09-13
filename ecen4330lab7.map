@@ -50,7 +50,7 @@ C:   00000008  s_REG_BANK_1
 C:   0000000A  l_GSINIT2                       
 C:   00000010  s_REG_BANK_2                    
 C:   00000018  s_REG_BANK_3                    
-C:   0000001D  l_GSINIT                        
+C:   0000001C  l_GSINIT                        
 C:   00000020  s_BSEG_BYTES                    
 C:   00000020  s__CODE                         
 C:   00000021  s_BIT_BANK                      
@@ -76,13 +76,13 @@ C:   0000007F  s_SSEG
 C:   00000081  l_SSEG                          
 C:   00000082  s_GSINIT                        
 C:   00000082  s_GSINIT5                       
-C:   0000009F  s_GSFINAL                       
-C:   000000A2  s_CSEG                          
+C:   0000009E  s_GSFINAL                       
+C:   000000A1  s_CSEG                          
 C:   00000100  l_IRAM                          
-C:   00000B68  l_CONST                         
-C:   000027C0  l_CSEG                          
-C:   00002862  s_CONST                         
-C:   000033CA  s_XINIT                         
+C:   00000B76  l_CONST                         
+C:   000028F0  l_CSEG                          
+C:   00002991  s_CONST                         
+C:   00003507  s_XINIT                         
 
 ASxxxx Linker V03.00 + NoICE + sdld,  page 3.
 Hexadecimal  [32-Bits]
@@ -436,7 +436,7 @@ Hexadecimal  [32-Bits]
 
 Area                                    Addr        Size        Decimal Bytes (Attributes)
 --------------------------------        ----        ----        ------- ----- ------------
-GSINIT                              00000082    0000001D =          29. bytes (REL,CON,CODE)
+GSINIT                              00000082    0000001C =          28. bytes (REL,CON,CODE)
 
       Value  Global                              Global Defined In Module
       -----  --------------------------------   ------------------------
@@ -445,7 +445,7 @@ Hexadecimal  [32-Bits]
 
 Area                                    Addr        Size        Decimal Bytes (Attributes)
 --------------------------------        ----        ----        ------- ----- ------------
-GSFINAL                             0000009F    00000003 =           3. bytes (REL,CON,CODE)
+GSFINAL                             0000009E    00000003 =           3. bytes (REL,CON,CODE)
 
       Value  Global                              Global Defined In Module
       -----  --------------------------------   ------------------------
@@ -454,91 +454,92 @@ Hexadecimal  [32-Bits]
 
 Area                                    Addr        Size        Decimal Bytes (Attributes)
 --------------------------------        ----        ----        ------- ----- ------------
-CSEG                                000000A2    000027C0 =       10176. bytes (REL,CON,CODE)
+CSEG                                000000A1    000028F0 =       10480. bytes (REL,CON,CODE)
 
       Value  Global                              Global Defined In Module
       -----  --------------------------------   ------------------------
-C:   000000A2  _ISR_receive                       ecen4330lab7
-C:   00000105  _UART_Init                         ecen4330lab7
-C:   00000115  _UART_transmit                     ecen4330lab7
-C:   0000011B  _delay                             ecen4330lab7
-C:   00000147  _writeRegister8                    ecen4330lab7
-C:   00000167  _writeRegister16                   ecen4330lab7
-C:   000001AC  _rtcInit                           ecen4330lab7
-C:   000001E2  _rtcBusy                           ecen4330lab7
-C:   000001F2  _rtcCmd                            ecen4330lab7
-C:   000001FB  _rtcWrite                          ecen4330lab7
-C:   0000022A  _rtcRead                           ecen4330lab7
-C:   00000263  _rtcPrint                          ecen4330lab7
-C:   000003BF  _setCursor                         ecen4330lab7
-C:   000003CC  _setTextColor                      ecen4330lab7
-C:   000003D9  _setTextSize                       ecen4330lab7
-C:   000003F1  _setRotation                       ecen4330lab7
-C:   0000045C  _setAddress                        ecen4330lab7
-C:   000004F7  _TFT_LCD_INIT                      ecen4330lab7
-C:   00000636  _drawPixel                         ecen4330lab7
-C:   00000687  _fillRect                          ecen4330lab7
-C:   00000764  _fillScreen                        ecen4330lab7
-C:   0000084B  _drawChar                          ecen4330lab7
-C:   00000A55  _write                             ecen4330lab7
-C:   00000ABB  _LCD_string_write                  ecen4330lab7
-C:   00000AFA  _keyDetect                         ecen4330lab7
-C:   00000C13  _ASCIItoHEX                        ecen4330lab7
-C:   00000CA9  _HEXtoASCII                        ecen4330lab7
-C:   00000D2B  _HEXtoASCII_8write                 ecen4330lab7
-C:   00000D68  _HEXtoASCII_16write                ecen4330lab7
-C:   00000E0D  _RAMwrite                          ecen4330lab7
-C:   00000E1D  _testRAM                           ecen4330lab7
-C:   00000E3C  _RAMread                           ecen4330lab7
-C:   00000E4F  _resetLCD                          ecen4330lab7
-C:   00000E77  _invalidInput                      ecen4330lab7
-C:   00000EA0  _inputRead16                       ecen4330lab7
-C:   00000F5B  _inputRead8                        ecen4330lab7
-C:   00000FAF  _inputDataType                     ecen4330lab7
-C:   0000106C  _inputDataSize                     ecen4330lab7
-C:   000011A3  _RAM_CHECK                         ecen4330lab7
-C:   000013DC  _MOVE                              ecen4330lab7
-C:   000015F8  _COUNT                             ecen4330lab7
-C:   000017DB  _DUMP_display                      ecen4330lab7
-C:   00001BA6  _DUMP                              ecen4330lab7
-C:   00001C98  _EDIT_display                      ecen4330lab7
-C:   00001D10  _EDIT                              ecen4330lab7
-C:   00001DC8  _FIND_display                      ecen4330lab7
-C:   000020BD  _FIND                              ecen4330lab7
-C:   0000217E  _resetLCD1                         ecen4330lab7
-C:   000021A6  _UART_dataRate                     ecen4330lab7
-C:   0000231B  _UART_dataBits                     ecen4330lab7
+C:   000000A1  _ISR_receive                       ecen4330lab7
+C:   000001A2  _UART_Init                         ecen4330lab7
+C:   000001B5  _UART_transmit                     ecen4330lab7
+C:   000001BB  _delay                             ecen4330lab7
+C:   000001E7  _writeRegister8                    ecen4330lab7
+C:   00000207  _writeRegister16                   ecen4330lab7
+C:   0000024C  _rtcInit                           ecen4330lab7
+C:   00000282  _rtcBusy                           ecen4330lab7
+C:   00000292  _rtcCmd                            ecen4330lab7
+C:   0000029B  _rtcWrite                          ecen4330lab7
+C:   000002CA  _rtcRead                           ecen4330lab7
+C:   00000303  _rtcPrint                          ecen4330lab7
+C:   0000045F  _setCursor                         ecen4330lab7
+C:   0000046C  _setTextColor                      ecen4330lab7
+C:   00000479  _setTextSize                       ecen4330lab7
+C:   00000491  _setRotation                       ecen4330lab7
+C:   000004FC  _setAddress                        ecen4330lab7
+C:   00000597  _TFT_LCD_INIT                      ecen4330lab7
+C:   000006D6  _drawPixel                         ecen4330lab7
+C:   00000727  _fillRect                          ecen4330lab7
+C:   00000804  _fillScreen                        ecen4330lab7
+C:   000008EB  _drawChar                          ecen4330lab7
+C:   00000AF5  _write                             ecen4330lab7
+C:   00000B5B  _LCD_string_write                  ecen4330lab7
+C:   00000B9A  _keyDetect                         ecen4330lab7
+C:   00000CB3  _ASCIItoHEX                        ecen4330lab7
+C:   00000D49  _HEXtoASCII                        ecen4330lab7
+C:   00000DCB  _HEXtoASCII_8write                 ecen4330lab7
+C:   00000E08  _HEXtoASCII_16write                ecen4330lab7
+C:   00000EAD  _RAMwrite                          ecen4330lab7
+C:   00000EBD  _testRAM                           ecen4330lab7
+C:   00000EDC  _RAMread                           ecen4330lab7
+C:   00000EEF  _resetLCD                          ecen4330lab7
+C:   00000F17  _invalidInput                      ecen4330lab7
+C:   00000F40  _inputRead16                       ecen4330lab7
+C:   00000FFB  _inputRead8                        ecen4330lab7
+C:   0000104F  _inputDataType                     ecen4330lab7
+C:   0000110C  _inputDataSize                     ecen4330lab7
+C:   00001243  _RAM_CHECK                         ecen4330lab7
+C:   0000147C  _MOVE                              ecen4330lab7
+C:   00001698  _COUNT                             ecen4330lab7
+C:   0000187B  _DUMP_display                      ecen4330lab7
+C:   00001C46  _DUMP                              ecen4330lab7
+C:   00001D38  _EDIT_display                      ecen4330lab7
+C:   00001DB0  _EDIT                              ecen4330lab7
+C:   00001E68  _FIND_display                      ecen4330lab7
+C:   0000215D  _FIND                              ecen4330lab7
+C:   0000221E  _resetLCD1                         ecen4330lab7
+C:   00002246  _UART_dataRate                     ecen4330lab7
+C:   000023C1  _UART_dataBits                     ecen4330lab7
 ASxxxx Linker V03.00 + NoICE + sdld,  page 21.
 Hexadecimal  [32-Bits]
 
 Area                                    Addr        Size        Decimal Bytes (Attributes)
 --------------------------------        ----        ----        ------- ----- ------------
-CSEG                                000000A2    000027C0 =       10176. bytes (REL,CON,CODE)
+CSEG                                000000A1    000028F0 =       10480. bytes (REL,CON,CODE)
 
       Value  Global                              Global Defined In Module
       -----  --------------------------------   ------------------------
-C:   000023E2  _UART_parity                       ecen4330lab7
-C:   000024D8  _UART_send                         ecen4330lab7
-C:   00002510  _UART                              ecen4330lab7
-C:   000025B9  _LCD_mainMenu                      ecen4330lab7
-C:   00002717  _main                              ecen4330lab7
-C:   000027AF  __divuint                          _divuint
-C:   000027D8  __mulint                           _mulint
-C:   000027D8  __mulint_dummy                     _mulint
-C:   000027F5  __moduint                          _moduint
-C:   00002842  __gptrget                          _gptrget
-C:   0000285E  __sdcc_external_startup            _startup
+C:   00002491  _UART_parity                       ecen4330lab7
+C:   00002587  _UART_parity_count                 ecen4330lab7
+C:   000025B4  _UART_send                         ecen4330lab7
+C:   0000263F  _UART                              ecen4330lab7
+C:   000026E8  _LCD_mainMenu                      ecen4330lab7
+C:   00002846  _main                              ecen4330lab7
+C:   000028DE  __divuint                          _divuint
+C:   00002907  __mulint                           _mulint
+C:   00002907  __mulint_dummy                     _mulint
+C:   00002924  __moduint                          _moduint
+C:   00002971  __gptrget                          _gptrget
+C:   0000298D  __sdcc_external_startup            _startup
 
 ASxxxx Linker V03.00 + NoICE + sdld,  page 22.
 Hexadecimal  [32-Bits]
 
 Area                                    Addr        Size        Decimal Bytes (Attributes)
 --------------------------------        ----        ----        ------- ----- ------------
-CONST                               00002862    00000B68 =        2920. bytes (REL,CON,CODE)
+CONST                               00002991    00000B76 =        2934. bytes (REL,CON,CODE)
 
       Value  Global                              Global Defined In Module
       -----  --------------------------------   ------------------------
-C:   00002D5D  _keypad                            ecen4330lab7
+C:   00002E8C  _keypad                            ecen4330lab7
 
 ASxxxx Linker V03.00 + NoICE + sdld,  page 23.
 
