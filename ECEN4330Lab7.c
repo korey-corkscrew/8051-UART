@@ -99,6 +99,7 @@ unsigned char x, y, ts;
 unsigned char dataRate = 0;
 unsigned char dataBits = 0;
 unsigned char parity = 2;
+unsigned char bitNine;
 
 volatile unsigned char received_byte = 0;
 volatile unsigned char received_flag = 0;
@@ -140,6 +141,15 @@ void ISR_receive() __interrupt (4) {
         
         data = UART_parity_count(received_byte);
         dataBits = SCON & 0xC0;
+
+        //LCD_string_write("\nParity: ");
+        //HEXtoASCII_8write(data);
+        //LCD_string_write("\nSCON: ");
+        //HEXtoASCII_8write(SCON);
+        //LCD_string_write("\n");
+
+        //HEXtoASCII_8write(dataBits);
+        //LCD_string_write("\n\n");
         switch(dataBits) {
             // 8-bits
             case 0x40:
@@ -176,13 +186,57 @@ void ISR_receive() __interrupt (4) {
                         LCD_string_write("UART data\nreceived.\n\n >> ");
                         write(received_byte);
                         delay(500);
+                        break;
                 }
                 break;
             // 9-bits
             case 0xC0:
-                LCD_string_write("9\n");
+                bitNine = SCON & 0x04;
+                //LCD_string_write("\n");
+                //HEXtoASCII_8write(data);
+                if(bitNine == 0x04) {
+                    data++;
+                }
+                //LCD_string_write("\n");
+                //HEXtoASCII_8write(data);
+                switch(parity) {
+                    // Even
+                    case 0:
+                        // Currently odd
+                        if(data % 2 != 0) {
+                            LCD_string_write("Parity\nError.");
+                        }
+                        else{
+                            //received_byte &= 0x7F;  // Clear parity bit
+                            LCD_string_write("UART data\nreceived.\n\n >> ");
+                            write(received_byte);
+                            delay(500);
+                        }
+                        break;
+                    // Odd
+                    case 1:
+                        // Currently even
+                        if(data % 2 == 0) {
+                            LCD_string_write("Parity\nError.");
+                        }
+                        else{
+                            //received_byte &= 0x7F;  // Clear parity bit
+                            LCD_string_write("UART data\nreceived.\n\n >> ");
+                            write(received_byte);
+                            delay(500);
+                        }
+                        break;
+                    // None
+                    case 2:
+                        //received_byte &= 0x7F;  // Clear parity bit
+                        LCD_string_write("UART data\nreceived.\n\n >> ");
+                        write(received_byte);
+                        delay(500);
+                        break;
+                }
                 break;
         }
+        SCON &= 0xF3;
     }
     else {
         TI = 0;
@@ -2392,8 +2446,8 @@ void UART_dataBits() {
                 SCON = SCON | 0xC0;
                 dataEnd = 1;
                 LCD_string_write("2\n");
-                delay(200);
-                UART_parity();
+                //delay(200);
+                //UART_parity();
                 break;
             default:
                 validInput = 0;
@@ -2492,6 +2546,8 @@ void UART_send() {
     write(key);
 
     data = UART_parity_count(key);
+    //LCD_string_write("\nParity: ");
+   // HEXtoASCII_8write(data);
 
     dataBits = SCON & 0xC0;
     switch(dataBits) {
@@ -2522,13 +2578,44 @@ void UART_send() {
             break;
         // 9-bits
         case 0xC0:
-            LCD_string_write("9\n");
+            switch(parity) {
+                // Even
+                case 0:
+                    // Currently odd
+                    if(data % 2 != 0) {
+                        // Set 9th bit high to make even
+                        SCON |= 0x08;
+                    }
+                    else {
+                        SCON &= 0xF7;
+                    }
+                    break;
+                // Odd
+                case 1:
+                    // Currently even
+                    if(data % 2 == 0) {
+                        // Set 9th bit high to make odd
+                        SCON |= 0x08;
+                    }
+                    else {
+                        SCON &= 0xF7;
+                    }
+                    break;
+                // None
+                case 2:
+                    SCON &= 0xF7;
+                    break;
+            }
             break;
     }
+    //LCD_string_write("\nSCON: ");
+    //HEXtoASCII_8write(SCON);
     //HEXtoASCII_8write(key);
-    //write(key);
-    //LCD_string_write("\n\n");
-    //delay(100);
+    //LCD_string_write("key: ");
+    //HEXtoASCII_8write(key);
+    //LCD_string_write("\nSCON: ");
+    //HEXtoASCII_8write(SCON);
+    //delay(500);
 
     SBUF = key;
     UART_transmit();
@@ -2558,6 +2645,57 @@ void UART(){
         LCD_string_write("\n(3) Parity");
         LCD_string_write("\n(4) Send Data");
         LCD_string_write("\n(E) End\n");
+        
+        setTextSize(2);
+        LCD_string_write("\n\n\nBaud:   ");
+        dataRate = PCON & 0x80;
+
+        if(dataRate == 0x80){
+            if (TH1 == 0xFD){
+                LCD_string_write("19200");
+            }
+            else{
+                LCD_string_write("Invalid");
+            }
+        }
+        else {
+            switch(TH1) {
+                case 0xE8:
+                    LCD_string_write("1200");
+                    break;
+                case 0xF4:
+                    LCD_string_write("2400");
+                    break;
+                case 0xFA:
+                    LCD_string_write("4800");
+                    break;
+                case 0xFD:
+                    LCD_string_write("9600");
+                    break;
+            }
+        }
+        LCD_string_write("\nBits:   ");
+        dataBits = SCON & 0xC0;
+        switch(dataBits) {
+            case 0x40:
+                LCD_string_write("8");
+                break;
+            case 0xC0:
+                LCD_string_write("9");
+                break;
+        }
+        LCD_string_write("\nParity: ");
+        switch(parity) {
+            case 0:
+                LCD_string_write("Even");
+                break;
+            case 1:
+                LCD_string_write("Odd");
+                break;
+            case 2:
+                LCD_string_write("None");
+                break;
+        }
         
         // Read user input & select respective function
         key = keyDetect();
