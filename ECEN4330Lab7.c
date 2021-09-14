@@ -1,8 +1,8 @@
 /**********************************************************************
  * * Cameron Biniamow
- * * ECEN 4330: Lab 6
+ * * ECEN 4350: Lab 1
  * * University of Nebraska - Lincoln
- * * Spring 2021
+ * * Fall 2021
  * 
  * Pin declarations:
  * * IOM --> P3^4
